@@ -1,0 +1,12 @@
+# M0 evidence can contain machine names, USB serials, IP addresses, and logs.
+artifacts/
+
+# Rust build output.
+target/
+
+# Local editor and operating-system files.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

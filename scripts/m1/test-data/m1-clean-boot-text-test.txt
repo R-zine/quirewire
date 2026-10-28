@@ -1,0 +1,14 @@
+PrintBridge M1 clean guest boot test
+====================================
+
+Required path:
+Windows application -> Microsoft IPP Class Driver -> clean headless Debian boot
+                    -> CUPS -> Brother Linux driver -> USB printer -> paper
+
+Confirm on the physical sheet:
+[ ] The page is legible and not clipped.
+[ ] The complete path above is readable.
+[ ] This token is present: PRINTBRIDGE-M1-CLEAN-BOOT-2026
+
+Queue: Brother via PrintBridge M1
+Milestone stage: clean ACPI shutdown followed by a headless cold start

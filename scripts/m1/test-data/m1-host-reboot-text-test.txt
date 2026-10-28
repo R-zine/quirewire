@@ -1,0 +1,14 @@
+PrintBridge M1 Windows host reboot test
+=======================================
+
+Required path:
+Windows application -> Microsoft IPP Class Driver -> restarted Windows host
+                    -> headless Debian CUPS -> Brother USB printer -> paper
+
+Confirm on the physical sheet:
+[ ] The page is legible and not clipped.
+[ ] The complete path above is readable.
+[ ] This token is present: PRINTBRIDGE-M1-HOST-REBOOT-2026
+
+Queue: Brother via PrintBridge M1
+Milestone stage: Windows host restart and documented manual VM recovery

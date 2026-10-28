@@ -1,0 +1,14 @@
+PrintBridge M1 USB reconnect test
+=================================
+
+Required path:
+Windows application -> Microsoft IPP Class Driver -> Debian CUPS
+                    -> recaptured Brother USB device -> paper
+
+Confirm on the physical sheet:
+[ ] The page is legible and not clipped.
+[ ] The complete path above is readable.
+[ ] This token is present: PRINTBRIDGE-M1-USB-RECONNECT-2026
+
+Queue: Brother via PrintBridge M1
+Milestone stage: physical USB disconnect and reconnect recovery

@@ -1,0 +1,93 @@
+//! Framework-free agent request handler.
+//!
+//! M2 hosts this handler in process for deterministic CLI tests. The standalone
+//! background executable and named-pipe transport are intentionally deferred to
+//! M6.
+
+use printbridge_core::{Controller, fake::FakePlatform};
+use printbridge_domain::Platform;
+use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+
+pub struct AgentService<P> {
+    controller: Controller<P>,
+}
+
+impl<P: Platform> AgentService<P> {
+    #[must_use]
+    pub const fn new(controller: Controller<P>) -> Self {
+        Self { controller }
+    }
+
+    pub fn controller(&self) -> &Controller<P> {
+        &self.controller
+    }
+}
+
+impl AgentService<FakePlatform> {
+    #[must_use]
+    pub fn fake_ready() -> Self {
+        let provider = FakePlatform::ready();
+        let (vm, usb, endpoint) = provider.selection();
+        Self::new(Controller::new(provider, vm, usb, endpoint))
+    }
+}
+
+impl<P: Platform> RequestHandler for AgentService<P> {
+    fn handle(&mut self, version: u16, request: Request) -> Response {
+        if version != PROTOCOL_VERSION {
+            return Response::Error {
+                code: "unsupported_protocol".into(),
+                message: format!("Protocol {version} is unsupported; expected {PROTOCOL_VERSION}."),
+            };
+        }
+        match request {
+            Request::GetStatus => Response::Status(self.controller.status()),
+            Request::Doctor => Response::Doctor(self.controller.doctor()),
+            Request::Help => Response::Help(help_text().into()),
+        }
+    }
+}
+
+#[must_use]
+pub const fn help_text() -> &'static str {
+    "PrintBridge M2 CLI (fake in-memory provider)\n\
+Usage: printbridgectl [--trace] <command>\n\n\
+Commands:\n\
+  status    Show typed component and overall state\n\
+  doctor    Run hardware-free provider contract checks\n\
+  help      Show this help\n\n\
+M2 never invokes VirtualBox, CUPS, Windows printing APIs, or physical hardware."
+}
+
+#[cfg(test)]
+mod tests {
+    use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+
+    use super::AgentService;
+
+    #[test]
+    fn rejects_unknown_protocol_version() {
+        let mut agent = AgentService::fake_ready();
+        let response = agent.handle(PROTOCOL_VERSION + 1, Request::GetStatus);
+        assert!(
+            matches!(response, Response::Error { ref code, .. } if code == "unsupported_protocol")
+        );
+    }
+
+    #[test]
+    fn fake_agent_serves_status_doctor_and_help() {
+        let mut agent = AgentService::fake_ready();
+        assert!(matches!(
+            agent.handle(PROTOCOL_VERSION, Request::GetStatus),
+            Response::Status(_)
+        ));
+        assert!(matches!(
+            agent.handle(PROTOCOL_VERSION, Request::Doctor),
+            Response::Doctor(_)
+        ));
+        assert!(matches!(
+            agent.handle(PROTOCOL_VERSION, Request::Help),
+            Response::Help(_)
+        ));
+    }
+}

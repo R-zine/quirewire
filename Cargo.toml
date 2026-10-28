@@ -1,0 +1,32 @@
+[workspace]
+members = [
+    "crates/domain",
+    "crates/core",
+    "crates/provider-virtualbox",
+    "crates/provider-cups",
+    "crates/provider-windows",
+    "crates/ipc",
+    "crates/agent",
+    "crates/cli",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[workspace.dependencies]
+printbridge-agent = { path = "crates/agent" }
+printbridge-core = { path = "crates/core" }
+printbridge-domain = { path = "crates/domain" }
+printbridge-ipc = { path = "crates/ipc" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
