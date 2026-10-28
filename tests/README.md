@@ -9,6 +9,9 @@ substitute for the physical acceptance gates in `SPEC.md`.
 - `m3/Invoke-M3WindowsIntegration.ps1` creates a disposable marked clone,
   removes inherited capture/host-forwarding rules, proves ownership refusal,
   and exercises repeated real VirtualBox start/stop before exact cleanup.
+- `m4/Invoke-M4SoftwareTests.ps1` checks guest script syntax, pinned inputs,
+  source/binary separation, protected endpoints, repair guards, diagnostics,
+  unsafe-input rejection, and the owner-only physical gate recorder.
 - `cargo test --workspace --all-features` runs domain, state-machine, retry,
   telemetry, protocol, CLI, fake-contract, command-parser, ownership, USB, and
   real-provider unit tests.

@@ -1,0 +1,10 @@
+/var/log/printbridge/*.log {
+    weekly
+    rotate 8
+    size 1M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 root adm
+}

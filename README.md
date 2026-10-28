@@ -1,12 +1,13 @@
 # PrintBridge
 
-PrintBridge has completed milestones M0 through M3:
+PrintBridge has completed milestones M0 through M4:
 
 - **M0 — feasibility:** `PASS: PHYSICAL`
 - **M1 — manual VM/USB/CUPS spike:** `PASS: PHYSICAL`
 - **M2 — Rust workspace/contracts/CLI/fakes:** `PASS: SOFTWARE ONLY`
 - **M3 — real VirtualBox provider and USB selection:** `PASS: WINDOWS
   INTEGRATION + OWNER-GATED USB`
+- **M4 — reproducible Linux appliance and guest management:** `PASS: PHYSICAL`
 
 The proven product path remains:
 
@@ -38,11 +39,12 @@ available; explicit one-based selection safely handles identical serial-less
 devices without installing a broad filter. CLI and trace output redact serial
 values.
 
-See [`scripts/m3/README.md`](scripts/m3/README.md) for configuration and the
-disposable-VM test, [`docs/m3-acceptance.md`](docs/m3-acceptance.md) for the
-owner-gated USB checklist, and [`docs/milestones/M03.md`](docs/milestones/M03.md)
-for actual results.
+See [`scripts/m3/README.md`](scripts/m3/README.md) for real VirtualBox provider
+configuration and [`guest/README.md`](guest/README.md) for the reproducible M4
+base/configured appliance build. M4's actual fresh-import, idempotent repair,
+real-IPP health and physical page evidence is recorded in
+[`docs/milestones/M04.md`](docs/milestones/M04.md).
 
-M3 does not build the reproducible appliance, implement a real CUPS provider,
-install a Windows queue, run a persistent named-pipe agent, or provide a GUI.
-Those remain sequential milestones M4–M7; no M4 work has started.
+M4 does not install or remove a Windows print queue. Windows IPP integration is
+M5 and has not started. The persistent named-pipe agent and GUI remain later
+sequential milestones.
