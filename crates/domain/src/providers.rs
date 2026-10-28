@@ -7,6 +7,7 @@ use crate::{
 
 pub trait Hypervisor {
     fn detect(&self) -> Result<DependencyInfo, BridgeError>;
+    fn validate_host_prerequisites(&self) -> Result<(), BridgeError>;
     fn import(
         &mut self,
         appliance: &Path,
@@ -22,7 +23,19 @@ pub trait Hypervisor {
 pub trait UsbAccess {
     fn list_devices(&self) -> Result<Vec<UsbDevice>, BridgeError>;
     fn capture_selected(&mut self, vm: &OwnedVm, device: &UsbIdentity) -> Result<(), BridgeError>;
+    fn capture_selected_host(
+        &mut self,
+        vm: &OwnedVm,
+        device: &UsbIdentity,
+        host_id: &str,
+    ) -> Result<(), BridgeError>;
     fn release_selected(&mut self, vm: &OwnedVm, device: &UsbIdentity) -> Result<(), BridgeError>;
+    fn release_selected_host(
+        &mut self,
+        vm: &OwnedVm,
+        device: &UsbIdentity,
+        host_id: &str,
+    ) -> Result<(), BridgeError>;
     fn attachment_status(
         &self,
         vm: &OwnedVm,

@@ -1,46 +1,48 @@
 # PrintBridge
 
-PrintBridge has completed **Milestone M0: feasibility** with `PASS: PHYSICAL`.
-It has also completed **Milestone M1: manual VM/USB/CUPS spike** with
-`PASS: PHYSICAL`. **Milestone M2: Rust workspace/contracts/CLI/fakes** is complete
-with `PASS: SOFTWARE ONLY`.
+PrintBridge has completed milestones M0 through M3:
 
-The current work verifies the essential path before product development starts:
+- **M0 — feasibility:** `PASS: PHYSICAL`
+- **M1 — manual VM/USB/CUPS spike:** `PASS: PHYSICAL`
+- **M2 — Rust workspace/contracts/CLI/fakes:** `PASS: SOFTWARE ONLY`
+- **M3 — real VirtualBox provider and USB selection:** `PASS: WINDOWS
+  INTEGRATION + OWNER-GATED USB`
+
+The proven product path remains:
 
 ```text
 Windows application -> Microsoft IPP Class Driver -> Linux CUPS
                     -> Linux printer driver -> USB printer -> paper
 ```
 
-Read [`SPEC.md`](SPEC.md) for the authoritative design and
-[`docs/feasibility.md`](docs/feasibility.md) for the exact M0 owner checklist.
-Generated evidence is written below `artifacts/`, which is intentionally ignored
-because it can contain machine names, local IP addresses, USB serial numbers, and
-print logs.
+Read [`SPEC.md`](SPEC.md) for the authoritative design. Milestone evidence and
+limitations are in [`docs/milestones/`](docs/milestones/). Generated machine
+evidence is written below `artifacts/`, which is ignored because it can contain
+machine names, local paths, USB serial numbers, and print logs.
 
-The M0 Linux USB baseline and normal Windows Notepad/PDF prints were physically
-confirmed through the **Microsoft IPP Class Driver**. See
-[`docs/milestones/M00.md`](docs/milestones/M00.md) for the correlated CUPS job IDs
-and test results. M1 physically passed normal Windows text/PDF, clean guest boot,
-USB disconnect/reconnect, and actual Windows host reboot through the minimal
-headless Debian guest. See
-[`docs/m1-acceptance.md`](docs/m1-acceptance.md) and
-[`docs/milestones/M01.md`](docs/milestones/M01.md).
-
-The M2 `printbridgectl` is deliberately hardware-free and labels its provider
-`fake-in-memory`. It exercises the same versioned request handler that the later
-agent transport will expose:
+M3 replaces the fake default CLI with a real VirtualBox-backed agent handler:
 
 ```powershell
-cargo run --quiet -p printbridgectl -- status
 cargo run --quiet -p printbridgectl -- doctor
-cargo run --quiet -p printbridgectl -- help
+cargo run --quiet -p printbridgectl -- usb list
+cargo run --quiet -p printbridgectl -- --config <path> vm status
+cargo run --quiet -p printbridgectl -- --config <path> vm start
+cargo run --quiet -p printbridgectl -- --config <path> vm stop
+cargo run --quiet -p printbridgectl -- --config <path> usb attach
+cargo run --quiet -p printbridgectl -- --config <path> usb release
 ```
 
-It does not invoke VirtualBox, CUPS, Windows printing APIs, or physical hardware,
-and it never treats a completed fake job as physical output. Real VirtualBox work
-is M3; no managed appliance, persistent background executable, named-pipe
-transport, or desktop UI exists yet. See
-[`docs/milestones/M02.md`](docs/milestones/M02.md). M3 is permitted but has not
-been started.
+Every VM mutation requires an exact canonical UUID and matching live
+PrintBridge ownership metadata. USB selection uses VID:PID plus serial when
+available; explicit one-based selection safely handles identical serial-less
+devices without installing a broad filter. CLI and trace output redact serial
+values.
 
+See [`scripts/m3/README.md`](scripts/m3/README.md) for configuration and the
+disposable-VM test, [`docs/m3-acceptance.md`](docs/m3-acceptance.md) for the
+owner-gated USB checklist, and [`docs/milestones/M03.md`](docs/milestones/M03.md)
+for actual results.
+
+M3 does not build the reproducible appliance, implement a real CUPS provider,
+install a Windows queue, run a persistent named-pipe agent, or provide a GUI.
+Those remain sequential milestones M4–M7; no M4 work has started.

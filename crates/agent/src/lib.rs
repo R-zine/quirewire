@@ -4,6 +4,10 @@
 //! background executable and named-pipe transport are intentionally deferred to
 //! M6.
 
+mod m3;
+
+pub use m3::{M3_CONFIG_SCHEMA, M3AgentService, M3Config, m3_help_text};
+
 use printbridge_core::{Controller, fake::FakePlatform};
 use printbridge_domain::Platform;
 use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
@@ -44,6 +48,17 @@ impl<P: Platform> RequestHandler for AgentService<P> {
             Request::GetStatus => Response::Status(self.controller.status()),
             Request::Doctor => Response::Doctor(self.controller.doctor()),
             Request::Help => Response::Help(help_text().into()),
+            Request::VmStatus
+            | Request::VmStart
+            | Request::VmStop
+            | Request::UsbList
+            | Request::UsbAttach
+            | Request::UsbAttachAt(_)
+            | Request::UsbRelease
+            | Request::UsbReleaseAt(_) => Response::Error {
+                code: "unsupported_command".into(),
+                message: "The M2 fake handler does not implement M3 hardware commands.".into(),
+            },
         }
     }
 }

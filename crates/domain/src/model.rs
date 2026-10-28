@@ -71,6 +71,9 @@ impl fmt::Display for UsbIdentity {
 pub struct UsbDevice {
     pub identity: UsbIdentity,
     pub display_name: String,
+    /// Provider-scoped, ephemeral host handle used for an explicit interactive
+    /// choice when otherwise identical serial-less devices are present.
+    pub host_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

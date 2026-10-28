@@ -1,20 +1,20 @@
 # Rust crates
 
-The M2 workspace keeps the product engine independent of any desktop framework:
+The workspace keeps the product engine independent of any desktop framework:
 
-| Crate | M2 responsibility |
+| Crate | Current responsibility |
 |---|---|
 | `domain` | Data types, error taxonomy, component status, and provider traits |
 | `core` | State machine, retry policy/fake clock, controller, fake providers, and safe structured tracing |
-| `ipc` | Versioned request/response contract plus an in-process M2 transport |
-| `agent` | Framework-free request handler over the core controller; executable transport is M6 |
-| `cli` | `printbridgectl status`, `doctor`, and `help` against the fake in-process agent |
-| `provider-virtualbox` | Boundary reserved for the real M3 provider |
+| `ipc` | Protocol v2 requests/responses plus the current in-process transport |
+| `agent` | M2 fake handler and real M3 VirtualBox handler; executable transport is M6 |
+| `cli` | Real M3 `doctor`, `vm`, and `usb` commands through the agent API |
+| `provider-virtualbox` | Real, timeout-bounded `VBoxManage` provider with exact ownership and USB selection |
 | `provider-cups` | Boundary reserved for the real M4 provider |
 | `provider-windows` | Boundary reserved for the real M5 provider |
 
-No M2 crate depends on Tauri, a Windows API binding, VirtualBox, CUPS, or a shell.
-The placeholder provider crates deliberately contain no simulated real behavior;
-hardware-free behavior lives only in `core::fake` and is labeled as fake by the
-CLI.
+No crate depends on Tauri or a shell. The CLI imports the agent/API, not the
+VirtualBox provider. The M3 process runner invokes `VBoxManage` directly with
+argument arrays and bounded timeouts. CUPS and Windows provider crates remain
+placeholders; hardware-free behavior stays explicitly labeled in `core::fake`.
 

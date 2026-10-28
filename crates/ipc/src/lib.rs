@@ -1,14 +1,22 @@
 //! Versioned agent protocol. M2 uses an in-process transport; the restricted
 //! Windows named-pipe transport is an M6 deliverable.
 
-use printbridge_domain::{BridgeStatus, DoctorReport};
+use printbridge_domain::{BridgeStatus, ComponentStatus, DoctorReport, UsbDevice};
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     GetStatus,
     Doctor,
+    VmStatus,
+    VmStart,
+    VmStop,
+    UsbList,
+    UsbAttach,
+    UsbAttachAt(usize),
+    UsbRelease,
+    UsbReleaseAt(usize),
     Help,
 }
 
@@ -16,6 +24,9 @@ pub enum Request {
 pub enum Response {
     Status(BridgeStatus),
     Doctor(DoctorReport),
+    VmStatus(ComponentStatus),
+    UsbDevices(Vec<UsbDevice>),
+    OperationComplete { operation: &'static str },
     Help(String),
     Error { code: String, message: String },
 }

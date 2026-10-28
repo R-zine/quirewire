@@ -77,6 +77,7 @@ impl FakePlatform {
             devices: vec![UsbDevice {
                 identity: selected_usb,
                 display_name: "Fake Brother printer".into(),
+                host_id: Some("fake-host-usb-1".into()),
             }],
             guest_queues: vec![PrintQueue {
                 name: "DCPL2600D".into(),
@@ -149,6 +150,10 @@ impl Hypervisor for FakePlatform {
         })
     }
 
+    fn validate_host_prerequisites(&self) -> Result<(), BridgeError> {
+        Ok(())
+    }
+
     fn import(
         &mut self,
         _appliance: &Path,
@@ -211,12 +216,42 @@ impl UsbAccess for FakePlatform {
         Ok(())
     }
 
+    fn capture_selected_host(
+        &mut self,
+        vm: &OwnedVm,
+        device: &UsbIdentity,
+        host_id: &str,
+    ) -> Result<(), BridgeError> {
+        if host_id != "fake-host-usb-1" {
+            return Err(BridgeError::PrinterMissing {
+                printer: device.to_string(),
+                action: "Select a currently listed host device.".into(),
+            });
+        }
+        self.capture_selected(vm, device)
+    }
+
     fn release_selected(&mut self, vm: &OwnedVm, device: &UsbIdentity) -> Result<(), BridgeError> {
         self.ensure_owned_vm(vm)?;
         self.ensure_selected_usb(device)?;
         self.usb = ComponentStatus::new(ComponentState::Waiting);
         self.actions.push(FakeAction::UsbReleased);
         Ok(())
+    }
+
+    fn release_selected_host(
+        &mut self,
+        vm: &OwnedVm,
+        device: &UsbIdentity,
+        host_id: &str,
+    ) -> Result<(), BridgeError> {
+        if host_id != "fake-host-usb-1" {
+            return Err(BridgeError::PrinterMissing {
+                printer: device.to_string(),
+                action: "Select a currently listed host device.".into(),
+            });
+        }
+        self.release_selected(vm, device)
     }
 
     fn attachment_status(
