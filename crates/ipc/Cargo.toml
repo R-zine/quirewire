@@ -7,6 +7,17 @@ publish.workspace = true
 
 [dependencies]
 printbridge-domain.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
 
-[lints]
-workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"

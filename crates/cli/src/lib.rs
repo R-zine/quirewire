@@ -8,9 +8,19 @@ use printbridge_domain::{
     CheckState, ComponentStatus, DoctorReport, JobState, UsbDevice, WindowsPrintSubmission,
     WindowsQueueStatus,
 };
-use printbridge_ipc::{Client, InProcessClient, Request, Response};
+use printbridge_ipc::{
+    Client, Command, CommandResult, InProcessClient, Payload, Request, RequestEnvelope, Response,
+};
 
 pub fn run(args: &[String], output: &mut impl Write, error: &mut impl Write) -> i32 {
+    match parse_m6_command(args) {
+        Some(Ok(command)) => return run_m6(command, output, error),
+        Some(Err(message)) => {
+            let _ = writeln!(error, "{message}\nRun 'printbridgectl help'.");
+            return 2;
+        }
+        None => {}
+    }
     let invocation = match parse_args(args) {
         Ok(invocation) => invocation,
         Err(message) => {
@@ -51,6 +61,137 @@ pub fn run(args: &[String], output: &mut impl Write, error: &mut impl Write) -> 
         };
         let mut client = InProcessClient::new(agent);
         run_invocation(invocation, &mut client, output, error)
+    }
+}
+
+fn parse_m6_command(args: &[String]) -> Option<Result<Command, String>> {
+    let command = args
+        .iter()
+        .position(|value| !matches!(value.as_str(), "--trace" | "--config"))
+        .and_then(|position| {
+            if position > 0
+                && args
+                    .get(position - 1)
+                    .is_some_and(|value| value == "--config")
+            {
+                args.get(position + 1..)
+            } else {
+                args.get(position..)
+            }
+        })
+        .unwrap_or(args);
+    let parsed = match command {
+        [value] if value == "status" => Ok(Command::GetStatus),
+        [value] if value == "devices" => Ok(Command::DiscoverDevices),
+        [value] if value == "start" => Ok(Command::Start),
+        [value] if value == "stop" => Ok(Command::Stop),
+        [value] if value == "restart" => Ok(Command::Restart),
+        [value] if value == "test-print" => Ok(Command::TestPrint),
+        [value] if value == "diagnostics" => Ok(Command::GetDiagnostics),
+        [value] if value == "repair" => Ok(Command::Repair),
+        [value, flag, index] if value == "setup" && flag == "--index" => index
+            .parse::<usize>()
+            .ok()
+            .filter(|value| *value > 0)
+            .map(|device_index| Command::BeginSetup { device_index })
+            .ok_or_else(|| "setup --index requires a positive one-based integer".into()),
+        [value, ..]
+            if matches!(
+                value.as_str(),
+                "status"
+                    | "devices"
+                    | "setup"
+                    | "start"
+                    | "stop"
+                    | "restart"
+                    | "test-print"
+                    | "diagnostics"
+                    | "repair"
+            ) =>
+        {
+            Err("Invalid M6 agent command arguments.".into())
+        }
+        _ => return None,
+    };
+    Some(parsed)
+}
+
+fn run_m6(command: Command, output: &mut impl Write, error: &mut impl Write) -> i32 {
+    #[cfg(not(windows))]
+    {
+        let _ = command;
+        let _ = output;
+        let _ = writeln!(
+            error,
+            "unsupported_platform: M6 named-pipe IPC requires Windows"
+        );
+        return 1;
+    }
+    #[cfg(windows)]
+    {
+        let sid = match printbridge_ipc::windows_pipe::current_user_sid() {
+            Ok(value) => value,
+            Err(failure) => {
+                let _ = writeln!(error, "ipc_identity: {failure}");
+                return 1;
+            }
+        };
+        let pipe_name = printbridge_ipc::windows_pipe::pipe_name_for_sid(&sid);
+        let request_id = format!(
+            "cli-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        let request = RequestEnvelope::new(request_id, command);
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(value) => value,
+            Err(failure) => {
+                let _ = writeln!(error, "ipc_runtime: {failure}");
+                return 1;
+            }
+        };
+        let response = match runtime.block_on(printbridge_ipc::windows_pipe::send(
+            &pipe_name,
+            &request,
+            std::time::Duration::from_secs(90),
+        )) {
+            Ok(value) => value,
+            Err(failure) => {
+                let _ = writeln!(
+                    error,
+                    "agent_unavailable: {failure}. Start the per-user PrintBridge agent."
+                );
+                return 1;
+            }
+        };
+        match response.result {
+            CommandResult::Ok { payload } => render_m6_payload(&payload, output),
+            CommandResult::Error { error: payload } => {
+                let _ = writeln!(error, "{}: {}", payload.code, payload.message);
+                1
+            }
+        }
+    }
+}
+
+fn render_m6_payload(payload: &Payload, output: &mut impl Write) -> i32 {
+    let rendered = match serde_json::to_string_pretty(payload) {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = writeln!(output, "serialization_error: {error}");
+            return 1;
+        }
+    };
+    if writeln!(output, "{rendered}").is_ok() {
+        0
+    } else {
+        1
     }
 }
 
@@ -330,8 +471,11 @@ fn provider_label(request: &Request) -> &'static str {
 }
 
 const fn cli_help_text() -> &'static str {
-    "PrintBridge M5 CLI\n\
+    "PrintBridge M6 CLI\n\
 Usage: printbridgectl [--trace] [--config <path>] <command>\n\n\
+Headless agent commands (named-pipe IPC):\n\
+  status | devices | setup --index N | start | stop | restart\n\
+  test-print | diagnostics | repair\n\n\
 VirtualBox commands (M3 config):\n\
   doctor | vm status | vm start | vm stop\n\
   usb list | usb attach [--index N] | usb release [--index N]\n\n\
@@ -414,9 +558,9 @@ mod tests {
         ComponentState, ComponentStatus, JobState, UsbDevice, UsbIdentity, WindowsPrintSubmission,
         WindowsQueueStatus,
     };
-    use printbridge_ipc::{Client, Request, Response};
+    use printbridge_ipc::{Client, Command, Request, Response};
 
-    use super::{parse_args, run_invocation};
+    use super::{parse_args, parse_m6_command, run_invocation};
 
     struct StubClient {
         response: Option<Response>,
@@ -466,6 +610,36 @@ mod tests {
             let arguments: Vec<String> = arguments.into_iter().map(str::to_string).collect();
             assert_eq!(parse_args(&arguments).expect("command").request, expected);
         }
+    }
+
+    #[test]
+    fn parses_every_m6_named_pipe_command() {
+        let cases = [
+            (vec!["status"], Command::GetStatus),
+            (vec!["devices"], Command::DiscoverDevices),
+            (vec!["start"], Command::Start),
+            (vec!["stop"], Command::Stop),
+            (vec!["restart"], Command::Restart),
+            (vec!["test-print"], Command::TestPrint),
+            (vec!["diagnostics"], Command::GetDiagnostics),
+            (vec!["repair"], Command::Repair),
+            (
+                vec!["setup", "--index", "2"],
+                Command::BeginSetup { device_index: 2 },
+            ),
+        ];
+        for (arguments, expected) in cases {
+            let arguments: Vec<String> = arguments.into_iter().map(str::to_string).collect();
+            assert_eq!(
+                parse_m6_command(&arguments).expect("M6").expect("valid"),
+                expected
+            );
+        }
+        assert!(
+            parse_m6_command(&["setup".into(), "--index".into(), "0".into()])
+                .expect("M6")
+                .is_err()
+        );
     }
 
     #[test]

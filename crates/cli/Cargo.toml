@@ -10,6 +10,8 @@ printbridge-agent.workspace = true
 printbridge-core.workspace = true
 printbridge-domain.workspace = true
 printbridge-ipc.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

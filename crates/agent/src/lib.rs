@@ -6,6 +6,7 @@
 
 mod m3;
 mod m5;
+pub mod m6;
 
 pub use m3::{M3_CONFIG_SCHEMA, M3AgentService, M3Config, m3_help_text};
 pub use m5::{M5_CONFIG_SCHEMA, M5AgentService, M5Config, m5_help_text};

@@ -16,7 +16,11 @@ substitute for the physical acceptance gates in `SPEC.md`.
   versioned provider protocol, loopback/ownership/default-printer guards,
   idempotent absent removal, CLI truthfulness, standard-app fixtures, and the
   negative physical-gate recorder without changing an installed queue.
+- `m6/Invoke-M6SoftwareTests.ps1` checks the typed IPC allow-list, frame bound,
+  owner-only pipe DACL, OS singleton, immutable state, bounded backoff,
+  idempotency cache, exact M4 ownership, Task Scheduler safeguards, redaction,
+  PowerShell syntax, and absence of Tauri.
 - `cargo test --workspace --all-features` runs domain, state-machine, retry,
   telemetry, protocol, CLI, fake-contract, command-parser, ownership, USB, and
-  real-provider unit tests.
+  real-provider, secure-pipe, supervisor, and startup unit tests.
 

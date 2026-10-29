@@ -1,12 +1,23 @@
-//! Versioned agent protocol. M2 uses an in-process transport; the restricted
-//! Windows named-pipe transport is an M6 deliverable.
+//! Versioned agent protocol shared by every non-UI client.
 
 use printbridge_domain::{
     BridgeStatus, ComponentStatus, DoctorReport, UsbDevice, WindowsPrintSubmission,
     WindowsQueueStatus,
 };
 
-pub const PROTOCOL_VERSION: u16 = 3;
+mod wire;
+
+#[cfg(windows)]
+pub mod windows_pipe;
+
+pub use wire::{
+    AgentComponents, AgentEvent, AgentStatus, Command, CommandResult, DeviceSummary, Diagnostics,
+    ErrorPayload, MAX_FRAME_BYTES, OperationResult, Payload, RequestEnvelope, ResponseEnvelope,
+    StartupStatus, TestPrintResult, WireComponent, WireComponentState, WireError, read_request,
+    read_response, write_request, write_response,
+};
+
+pub const PROTOCOL_VERSION: u16 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {

@@ -25,6 +25,8 @@ pub const EXPECTED_DRIVER: &str = "Microsoft IPP Class Driver";
 pub const OWNERSHIP_SCHEMA: &str = "printbridge.m5.owned-printer.v1";
 pub const PRINTING_IMPLEMENTATION_MILESTONE: &str = "M5";
 pub const STARTUP_IMPLEMENTATION_MILESTONE: &str = "M6";
+pub const STARTUP_TASK_PATH: &str = r"\PrintBridge\";
+pub const STARTUP_TASK_NAME: &str = "Agent";
 
 static CORRELATION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -36,6 +38,130 @@ pub struct WindowsProviderConfig {
     pub printer_name: String,
     pub endpoint: PrinterEndpoint,
     pub command_timeout: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct WindowsStartupConfig {
+    pub powershell: PathBuf,
+    pub script: PathBuf,
+    pub agent_executable: PathBuf,
+    pub agent_config: PathBuf,
+    pub owner_sid: String,
+    pub command_timeout: Duration,
+}
+
+pub struct WindowsStartupProvider<R = ProcessRunner> {
+    runner: R,
+    config: WindowsStartupConfig,
+}
+
+impl WindowsStartupProvider<ProcessRunner> {
+    pub fn discover(
+        agent_executable: impl Into<PathBuf>,
+        agent_config: impl Into<PathBuf>,
+        owner_sid: impl Into<String>,
+    ) -> Result<Self, BridgeError> {
+        let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../scripts/m6/windows/Invoke-M6Startup.ps1");
+        if !script.is_file() {
+            return Err(BridgeError::MissingDependency {
+                dependency: script.display().to_string(),
+                action: "Restore the tracked M6 startup provider script.".into(),
+            });
+        }
+        Ok(Self::new(WindowsStartupConfig {
+            powershell: PathBuf::from("powershell.exe"),
+            script,
+            agent_executable: agent_executable.into(),
+            agent_config: agent_config.into(),
+            owner_sid: owner_sid.into(),
+            command_timeout: Duration::from_secs(60),
+        }))
+    }
+
+    #[must_use]
+    pub fn new(config: WindowsStartupConfig) -> Self {
+        Self {
+            runner: ProcessRunner,
+            config,
+        }
+    }
+}
+
+impl<R: CommandRunner> WindowsStartupProvider<R> {
+    #[must_use]
+    pub const fn with_runner(config: WindowsStartupConfig, runner: R) -> Self {
+        Self { runner, config }
+    }
+
+    fn invoke_startup(
+        &self,
+        action: &str,
+    ) -> Result<printbridge_domain::StartupRegistration, BridgeError> {
+        let arguments = [
+            OsString::from("-NoLogo"),
+            OsString::from("-NoProfile"),
+            OsString::from("-NonInteractive"),
+            OsString::from("-ExecutionPolicy"),
+            OsString::from("Bypass"),
+            OsString::from("-File"),
+            self.config.script.as_os_str().to_os_string(),
+            OsString::from("-Action"),
+            OsString::from(action),
+            OsString::from("-AgentExecutable"),
+            self.config.agent_executable.as_os_str().to_os_string(),
+            OsString::from("-AgentConfig"),
+            self.config.agent_config.as_os_str().to_os_string(),
+            OsString::from("-OwnerSid"),
+            OsString::from(&self.config.owner_sid),
+        ];
+        let output = self.runner.run(
+            &self.config.powershell,
+            &arguments,
+            self.config.command_timeout,
+        )?;
+        let record = ProviderRecord::parse(&output.stdout)?;
+        if output.exit_code != Some(0) || !record.boolean("ok")? {
+            return Err(BridgeError::PermissionDenied {
+                operation: "managing the PrintBridge login task".into(),
+                action: record.optional_text("error_message")?.unwrap_or_else(|| {
+                    "Review Task Scheduler permissions and exact task ownership.".into()
+                }),
+            });
+        }
+        Ok(printbridge_domain::StartupRegistration {
+            enabled: record.boolean("enabled")?,
+            owner: record.text("owner_sid")?,
+        })
+    }
+}
+
+impl<R: CommandRunner> printbridge_domain::Startup for WindowsStartupProvider<R> {
+    fn enable_login_start(&mut self) -> Result<(), BridgeError> {
+        let registration = self.invoke_startup("Enable")?;
+        if registration.enabled {
+            Ok(())
+        } else {
+            Err(BridgeError::Internal {
+                detail: "startup provider did not enable the owned task".into(),
+            })
+        }
+    }
+
+    fn disable_login_start(&mut self) -> Result<(), BridgeError> {
+        let registration = self.invoke_startup("Disable")?;
+        if registration.enabled {
+            Err(BridgeError::Internal {
+                detail: "startup provider left the owned task enabled".into(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_registration(&self) -> Result<printbridge_domain::StartupRegistration, BridgeError> {
+        self.invoke_startup("Status")
+    }
 }
 
 impl WindowsProviderConfig {

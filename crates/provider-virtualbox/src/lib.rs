@@ -33,6 +33,7 @@ pub const OWNERSHIP_MARKER_KEY: &str = "PrintBridge/Owner";
 #[derive(Debug, Clone)]
 pub struct VirtualBoxConfig {
     pub executable: PathBuf,
+    pub ownership_schema: String,
     pub command_timeout: Duration,
     pub import_timeout: Duration,
     pub shutdown_timeout: Duration,
@@ -43,10 +44,17 @@ impl VirtualBoxConfig {
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
             executable: executable.into(),
+            ownership_schema: OWNERSHIP_SCHEMA_VALUE.into(),
             command_timeout: Duration::from_secs(15),
             import_timeout: Duration::from_secs(15 * 60),
             shutdown_timeout: Duration::from_secs(60),
         }
+    }
+
+    #[must_use]
+    pub fn with_ownership_schema(mut self, schema: impl Into<String>) -> Self {
+        self.ownership_schema = schema.into();
+        self
     }
 }
 
@@ -57,6 +65,13 @@ pub struct VirtualBoxProvider<R = ProcessRunner> {
 
 impl VirtualBoxProvider<ProcessRunner> {
     pub fn discover() -> Result<Self, BridgeError> {
+        Self::discover_with_ownership_schema(OWNERSHIP_SCHEMA_VALUE)
+    }
+
+    pub fn discover_with_ownership_schema(
+        ownership_schema: impl Into<String>,
+    ) -> Result<Self, BridgeError> {
+        let ownership_schema = ownership_schema.into();
         let mut candidates = Vec::new();
         if let Some(configured) = env::var_os("PRINTBRIDGE_VBOXMANAGE") {
             candidates.push(PathBuf::from(configured));
@@ -68,7 +83,9 @@ impl VirtualBoxProvider<ProcessRunner> {
 
         let mut last_error = None;
         for executable in candidates {
-            let provider = Self::new(VirtualBoxConfig::new(executable));
+            let provider = Self::new(
+                VirtualBoxConfig::new(executable).with_ownership_schema(ownership_schema.clone()),
+            );
             match provider.version() {
                 Ok(version) if version.supported() => return Ok(provider),
                 Ok(version) => {
@@ -156,7 +173,7 @@ impl<R: CommandRunner> VirtualBoxProvider<R> {
         }
         let schema = self.extra_data(vm.id.as_str(), OWNERSHIP_SCHEMA_KEY)?;
         let marker = self.extra_data(vm.id.as_str(), OWNERSHIP_MARKER_KEY)?;
-        if schema.as_deref() != Some(OWNERSHIP_SCHEMA_VALUE)
+        if schema.as_deref() != Some(self.config.ownership_schema.as_str())
             || marker.as_deref() != Some(vm.marker.as_str())
         {
             return Err(ownership_error("live VM ownership metadata does not match"));
@@ -439,7 +456,7 @@ impl<R: CommandRunner> Hypervisor for VirtualBoxProvider<R> {
                 detail: "imported VM omitted UUID".into(),
             })?;
         let result = self
-            .set_extra_data(&uuid, OWNERSHIP_SCHEMA_KEY, OWNERSHIP_SCHEMA_VALUE)
+            .set_extra_data(&uuid, OWNERSHIP_SCHEMA_KEY, &self.config.ownership_schema)
             .and_then(|()| self.set_extra_data(&uuid, OWNERSHIP_MARKER_KEY, marker.as_str()));
         if let Err(error) = result {
             let _ = self.run_raw(

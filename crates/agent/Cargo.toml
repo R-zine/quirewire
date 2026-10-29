@@ -9,8 +9,12 @@ publish.workspace = true
 printbridge-core.workspace = true
 printbridge-domain.workspace = true
 printbridge-ipc.workspace = true
+printbridge-provider-cups = { path = "../provider-cups" }
 printbridge-provider-virtualbox = { path = "../provider-virtualbox" }
 printbridge-provider-windows = { path = "../provider-windows" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true
