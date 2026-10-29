@@ -4,7 +4,8 @@ use std::path::Path;
 use printbridge_domain::{
     BridgeError, ComponentState, ComponentStatus, DependencyInfo, DiagnosticEntry, GuestPrinting,
     Hypervisor, JobId, JobState, OwnedVm, OwnershipMarker, PrintJob, PrintQueue, PrinterEndpoint,
-    Startup, StartupRegistration, UsbAccess, UsbDevice, UsbIdentity, VmId, WindowsPrinting,
+    Startup, StartupRegistration, UsbAccess, UsbDevice, UsbIdentity, VmId, WindowsPrintSubmission,
+    WindowsPrinting, WindowsQueueStatus,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -426,6 +427,36 @@ impl WindowsPrinting for FakePlatform {
 
     fn windows_queue_status(&self) -> Result<ComponentStatus, BridgeError> {
         Ok(self.windows.clone())
+    }
+
+    fn inspect_owned_queue(&self, name: &str) -> Result<WindowsQueueStatus, BridgeError> {
+        let queue = self
+            .owned_windows_queues
+            .iter()
+            .find(|queue| queue.name == name)
+            .cloned();
+        Ok(WindowsQueueStatus {
+            ownership_verified: queue.is_some(),
+            queue,
+            endpoint: self.endpoint.windows_ipp_url(),
+            port_name: Some("WSD-fake".into()),
+            printer_status: Some("Normal".into()),
+            spooler_running: true,
+            ipp_url_supported: true,
+            is_default: false,
+        })
+    }
+
+    fn submit_windows_test_page(
+        &mut self,
+        name: &str,
+    ) -> Result<WindowsPrintSubmission, BridgeError> {
+        self.verify_driver(name)?;
+        Ok(WindowsPrintSubmission {
+            correlation_id: "00000000-0000-4000-8000-000000000002".into(),
+            spooler_job_id: Some(1),
+            state: JobState::Accepted,
+        })
     }
 }
 

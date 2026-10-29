@@ -119,12 +119,42 @@ impl PrinterEndpoint {
             Self::Loopback { queue, .. } | Self::HostOnly { queue, .. } => queue,
         }
     }
+
+    /// URI passed to Windows directed IPP discovery. Queue names are validated
+    /// by the configuration parser before reaching this boundary.
+    #[must_use]
+    pub fn windows_ipp_url(&self) -> String {
+        let host = match self.host() {
+            IpAddr::V4(address) => address.to_string(),
+            IpAddr::V6(address) => format!("[{address}]"),
+        };
+        format!("http://{host}:{}/printers/{}", self.port(), self.queue())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrintQueue {
     pub name: String,
     pub driver: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowsQueueStatus {
+    pub queue: Option<PrintQueue>,
+    pub endpoint: String,
+    pub port_name: Option<String>,
+    pub printer_status: Option<String>,
+    pub spooler_running: bool,
+    pub ipp_url_supported: bool,
+    pub ownership_verified: bool,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowsPrintSubmission {
+    pub correlation_id: String,
+    pub spooler_job_id: Option<u32>,
+    pub state: JobState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -160,7 +190,7 @@ pub struct StartupRegistration {
 
 #[cfg(test)]
 mod tests {
-    use super::{JobId, JobState, PrintJob, UsbIdentity};
+    use super::{JobId, JobState, PrintJob, PrinterEndpoint, UsbIdentity};
 
     #[test]
     fn usb_display_never_includes_serial() {
@@ -184,5 +214,17 @@ mod tests {
         };
         assert_ne!(job.state, JobState::PhysicalOutputConfirmed);
         assert!(job.physical_confirmation_source.is_none());
+    }
+
+    #[test]
+    fn windows_ipp_url_uses_the_stable_endpoint_and_queue() {
+        let endpoint = PrinterEndpoint::Loopback {
+            port: 8644,
+            queue: "PrintBridge_DCP_L2600D".into(),
+        };
+        assert_eq!(
+            endpoint.windows_ipp_url(),
+            "http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D"
+        );
     }
 }

@@ -2,9 +2,12 @@ use std::env;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use printbridge_agent::{M3AgentService, M3Config, m3_help_text};
+use printbridge_agent::{M3AgentService, M3Config, M5AgentService, M5Config};
 use printbridge_core::{TraceEvent, TraceField, TraceLevel};
-use printbridge_domain::{CheckState, ComponentStatus, DoctorReport, UsbDevice};
+use printbridge_domain::{
+    CheckState, ComponentStatus, DoctorReport, JobState, UsbDevice, WindowsPrintSubmission,
+    WindowsQueueStatus,
+};
 use printbridge_ipc::{Client, InProcessClient, Request, Response};
 
 pub fn run(args: &[String], output: &mut impl Write, error: &mut impl Write) -> i32 {
@@ -16,29 +19,39 @@ pub fn run(args: &[String], output: &mut impl Write, error: &mut impl Write) -> 
         }
     };
     if invocation.request == Request::Help {
-        return render_response(Response::Help(m3_help_text().into()), output, error);
+        return render_response(Response::Help(cli_help_text().into()), output, error);
     }
-    let config = match load_config(invocation.config_path.as_deref()) {
-        Ok(config) => config,
-        Err(config_error) => {
-            return render_response(error_response(config_error), output, error);
-        }
-    };
-    let agent = match M3AgentService::discover(config) {
-        Ok(agent) => agent,
-        Err(provider_error) => {
-            return render_response(
-                Response::Error {
-                    code: provider_error.kind().as_str().into(),
-                    message: provider_error.to_string(),
-                },
-                output,
-                error,
-            );
-        }
-    };
-    let mut client = InProcessClient::new(agent);
-    run_invocation(invocation, &mut client, output, error)
+    if is_printer_request(&invocation.request) {
+        let config = match load_m5_config(invocation.config_path.as_deref()) {
+            Ok(config) => config,
+            Err(config_error) => {
+                return render_response(error_response(config_error), output, error);
+            }
+        };
+        let agent = match M5AgentService::discover(config) {
+            Ok(agent) => agent,
+            Err(provider_error) => {
+                return render_response(error_response(provider_error), output, error);
+            }
+        };
+        let mut client = InProcessClient::new(agent);
+        run_invocation(invocation, &mut client, output, error)
+    } else {
+        let config = match load_m3_config(invocation.config_path.as_deref()) {
+            Ok(config) => config,
+            Err(config_error) => {
+                return render_response(error_response(config_error), output, error);
+            }
+        };
+        let agent = match M3AgentService::discover(config) {
+            Ok(agent) => agent,
+            Err(provider_error) => {
+                return render_response(error_response(provider_error), output, error);
+            }
+        };
+        let mut client = InProcessClient::new(agent);
+        run_invocation(invocation, &mut client, output, error)
+    }
 }
 
 fn run_invocation(
@@ -53,7 +66,7 @@ fn run_invocation(
             event: "cli_command",
             fields: vec![
                 TraceField::public("command", invocation.command_label),
-                TraceField::public("provider", "virtualbox-real"),
+                TraceField::public("provider", provider_label(&invocation.request)),
             ],
         };
         if writeln!(error, "{}", event.to_json_line()).is_err() {
@@ -116,6 +129,18 @@ fn parse_args(args: &[String]) -> Result<Invocation, String> {
         {
             (Request::UsbReleaseAt(parse_index(index)?), "usb_release")
         }
+        [group, action] if group == "printer" && action == "install" => {
+            (Request::PrinterInstall, "printer_install")
+        }
+        [group, action] if group == "printer" && action == "status" => {
+            (Request::PrinterStatus, "printer_status")
+        }
+        [group, action] if group == "printer" && action == "test-page" => {
+            (Request::PrinterTestPage, "printer_test_page")
+        }
+        [group, action] if group == "printer" && action == "remove" => {
+            (Request::PrinterRemove, "printer_remove")
+        }
         _ => return Err("Unknown or incomplete command.".into()),
     };
     Ok(Invocation {
@@ -136,7 +161,7 @@ fn parse_index(value: &str) -> Result<usize, String> {
     Ok(parsed)
 }
 
-fn load_config(
+fn load_m3_config(
     explicit: Option<&Path>,
 ) -> Result<Option<M3Config>, printbridge_domain::BridgeError> {
     let configured = explicit
@@ -153,6 +178,30 @@ fn load_config(
         M3Config::load(&default).map(Some)
     } else {
         Ok(None)
+    }
+}
+
+fn load_m5_config(explicit: Option<&Path>) -> Result<M5Config, printbridge_domain::BridgeError> {
+    let configured = explicit
+        .map(Path::to_path_buf)
+        .or_else(|| env::var_os("PRINTBRIDGE_M5_CONFIG").map(PathBuf::from));
+    if let Some(path) = configured {
+        return M5Config::load(&path);
+    }
+    let local_app_data = env::var_os("LOCALAPPDATA").ok_or_else(|| {
+        printbridge_domain::BridgeError::MissingDependency {
+            dependency: "M5 configuration".into(),
+            action: "Pass --config <path> using printbridge.m5.config.v1.".into(),
+        }
+    })?;
+    let default = PathBuf::from(local_app_data).join("PrintBridge/m5.conf");
+    if default.is_file() {
+        M5Config::load(&default)
+    } else {
+        Err(printbridge_domain::BridgeError::MissingDependency {
+            dependency: format!("M5 configuration at {}", default.display()),
+            action: "Pass --config <path> or create the documented per-user m5.conf.".into(),
+        })
     }
 }
 
@@ -175,6 +224,8 @@ fn render_response(response: Response, output: &mut impl Write, error: &mut impl
         Response::Doctor(report) => write_doctor(&report, output),
         Response::VmStatus(status) => write_component("vm", &status, output),
         Response::UsbDevices(devices) => write_usb_devices(&devices, output),
+        Response::PrinterStatus(status) => write_printer_status(&status, output),
+        Response::PrinterTestPage(submission) => write_print_submission(&submission, output),
         Response::OperationComplete { operation } => match writeln!(output, "{operation}: ok") {
             Ok(()) => 0,
             Err(_) => 1,
@@ -188,6 +239,105 @@ fn render_response(response: Response, output: &mut impl Write, error: &mut impl
             1
         }
     }
+}
+
+fn write_printer_status(status: &WindowsQueueStatus, output: &mut impl Write) -> i32 {
+    let queue_found = status.queue.is_some();
+    let result = writeln!(output, "provider: windows-printmanagement-real")
+        .and_then(|()| writeln!(output, "ipp_url_supported: {}", status.ipp_url_supported))
+        .and_then(|()| {
+            writeln!(
+                output,
+                "spooler: {}",
+                if status.spooler_running {
+                    "running"
+                } else {
+                    "stopped"
+                }
+            )
+        })
+        .and_then(|()| writeln!(output, "queue_found: {queue_found}"))
+        .and_then(|()| writeln!(output, "ownership_verified: {}", status.ownership_verified))
+        .and_then(|()| writeln!(output, "default_printer: {}", status.is_default))
+        .and_then(|()| writeln!(output, "endpoint: {}", status.endpoint));
+    if result.is_err() {
+        return 1;
+    }
+    if let Some(queue) = &status.queue {
+        if writeln!(output, "queue_name: {}", queue.name)
+            .and_then(|()| writeln!(output, "driver: {}", queue.driver))
+            .and_then(|()| {
+                writeln!(
+                    output,
+                    "port: {}",
+                    status.port_name.as_deref().unwrap_or("<unavailable>")
+                )
+            })
+            .and_then(|()| {
+                writeln!(
+                    output,
+                    "printer_status: {}",
+                    status.printer_status.as_deref().unwrap_or("<unavailable>")
+                )
+            })
+            .is_err()
+        {
+            return 1;
+        }
+    }
+    if writeln!(output, "physical_output: not_inferred").is_ok() {
+        0
+    } else {
+        1
+    }
+}
+
+fn write_print_submission(submission: &WindowsPrintSubmission, output: &mut impl Write) -> i32 {
+    let state = match submission.state {
+        JobState::Accepted => "accepted_by_windows_spooler",
+        JobState::CompletedByCups => "completed_by_cups",
+        JobState::PhysicalOutputConfirmed => "physical_output_confirmed",
+        JobState::Failed => "failed",
+    };
+    let job_id = submission
+        .spooler_job_id
+        .map_or_else(|| "not_observed".into(), |value| value.to_string());
+    let result = writeln!(output, "provider: windows-printmanagement-real")
+        .and_then(|()| writeln!(output, "submission: {state}"))
+        .and_then(|()| writeln!(output, "correlation_id: {}", submission.correlation_id))
+        .and_then(|()| writeln!(output, "spooler_job_id: {job_id}"))
+        .and_then(|()| writeln!(output, "cups_processing: not_inferred"))
+        .and_then(|()| writeln!(output, "physical_output: not_inferred"));
+    if result.is_ok() { 0 } else { 1 }
+}
+
+fn is_printer_request(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::PrinterInstall
+            | Request::PrinterStatus
+            | Request::PrinterTestPage
+            | Request::PrinterRemove
+    )
+}
+
+fn provider_label(request: &Request) -> &'static str {
+    if is_printer_request(request) {
+        "windows-printmanagement-real"
+    } else {
+        "virtualbox-real"
+    }
+}
+
+const fn cli_help_text() -> &'static str {
+    "PrintBridge M5 CLI\n\
+Usage: printbridgectl [--trace] [--config <path>] <command>\n\n\
+VirtualBox commands (M3 config):\n\
+  doctor | vm status | vm start | vm stop\n\
+  usb list | usb attach [--index N] | usb release [--index N]\n\n\
+Windows printing commands (M5 config):\n\
+  printer install | printer status | printer test-page | printer remove\n\n\
+The printer test page proves Windows spooler submission only. CUPS processing and physical paper output are reported separately."
 }
 
 fn write_component(name: &str, status: &ComponentStatus, output: &mut impl Write) -> i32 {
@@ -260,7 +410,10 @@ fn write_doctor(report: &DoctorReport, output: &mut impl Write) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use printbridge_domain::{ComponentState, ComponentStatus, UsbDevice, UsbIdentity};
+    use printbridge_domain::{
+        ComponentState, ComponentStatus, JobState, UsbDevice, UsbIdentity, WindowsPrintSubmission,
+        WindowsQueueStatus,
+    };
     use printbridge_ipc::{Client, Request, Response};
 
     use super::{parse_args, run_invocation};
@@ -287,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_every_m3_command_and_one_based_usb_selection() {
+    fn parses_every_supported_command_and_one_based_usb_selection() {
         let cases = [
             (vec!["doctor"], Request::Doctor),
             (vec!["vm", "status"], Request::VmStatus),
@@ -304,6 +457,10 @@ mod tests {
                 vec!["usb", "release", "--index", "1"],
                 Request::UsbReleaseAt(1),
             ),
+            (vec!["printer", "install"], Request::PrinterInstall),
+            (vec!["printer", "status"], Request::PrinterStatus),
+            (vec!["printer", "test-page"], Request::PrinterTestPage),
+            (vec!["printer", "remove"], Request::PrinterRemove),
         ];
         for (arguments, expected) in cases {
             let arguments: Vec<String> = arguments.into_iter().map(str::to_string).collect();
@@ -384,5 +541,47 @@ mod tests {
         assert!(
             parse_args(&["usb".into(), "attach".into(), "--index".into(), "0".into()]).is_err()
         );
+    }
+
+    #[test]
+    fn printer_status_and_submission_are_truthful() {
+        let invocation = parse_args(&["printer".into(), "status".into()]).expect("args");
+        let mut client = StubClient::returning(Response::PrinterStatus(WindowsQueueStatus {
+            queue: Some(printbridge_domain::PrintQueue {
+                name: "Brother via PrintBridge".into(),
+                driver: "Microsoft IPP Class Driver".into(),
+            }),
+            endpoint: "http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D".into(),
+            port_name: Some("WSD-test".into()),
+            printer_status: Some("Normal".into()),
+            spooler_running: true,
+            ipp_url_supported: true,
+            ownership_verified: true,
+            is_default: false,
+        }));
+        let mut output = Vec::new();
+        let mut error = Vec::new();
+        assert_eq!(
+            run_invocation(invocation, &mut client, &mut output, &mut error),
+            0
+        );
+        let output = String::from_utf8(output).expect("UTF-8");
+        assert!(output.contains("driver: Microsoft IPP Class Driver"));
+        assert!(output.contains("physical_output: not_inferred"));
+
+        let invocation = parse_args(&["printer".into(), "test-page".into()]).expect("args");
+        let mut client = StubClient::returning(Response::PrinterTestPage(WindowsPrintSubmission {
+            correlation_id: "m5-test".into(),
+            spooler_job_id: Some(7),
+            state: JobState::Accepted,
+        }));
+        let mut output = Vec::new();
+        assert_eq!(
+            run_invocation(invocation, &mut client, &mut output, &mut error),
+            0
+        );
+        let output = String::from_utf8(output).expect("UTF-8");
+        assert!(output.contains("accepted_by_windows_spooler"));
+        assert!(output.contains("cups_processing: not_inferred"));
     }
 }

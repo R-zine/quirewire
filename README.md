@@ -1,6 +1,6 @@
 # PrintBridge
 
-PrintBridge has completed milestones M0 through M4:
+PrintBridge has completed milestones M0 through M5:
 
 - **M0 — feasibility:** `PASS: PHYSICAL`
 - **M1 — manual VM/USB/CUPS spike:** `PASS: PHYSICAL`
@@ -8,6 +8,7 @@ PrintBridge has completed milestones M0 through M4:
 - **M3 — real VirtualBox provider and USB selection:** `PASS: WINDOWS
   INTEGRATION + OWNER-GATED USB`
 - **M4 — reproducible Linux appliance and guest management:** `PASS: PHYSICAL`
+- **M5 — Windows IPP printer integration:** `PASS: PHYSICAL`
 
 The proven product path remains:
 
@@ -45,6 +46,15 @@ base/configured appliance build. M4's actual fresh-import, idempotent repair,
 real-IPP health and physical page evidence is recorded in
 [`docs/milestones/M04.md`](docs/milestones/M04.md).
 
-M4 does not install or remove a Windows print queue. Windows IPP integration is
-M5 and has not started. The persistent named-pipe agent and GUI remain later
-sequential milestones.
+M5 adds a marker-owned Windows queue and safe real commands:
+
+```powershell
+cargo run --quiet -p printbridgectl -- --config .\scripts\m5\m5.conf printer install
+cargo run --quiet -p printbridgectl -- --config .\scripts\m5\m5.conf printer status
+cargo run --quiet -p printbridgectl -- --config .\scripts\m5\m5.conf printer test-page
+cargo run --quiet -p printbridgectl -- --config .\scripts\m5\m5.conf printer remove
+```
+
+See [`scripts/m5/README.md`](scripts/m5/README.md) for the physical text/PDF,
+restart, independent-removal and final-reinstall gate. The persistent named-pipe
+agent and GUI remain later sequential milestones and do not start until M5 passes.

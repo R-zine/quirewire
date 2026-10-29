@@ -10,6 +10,7 @@ dependencies = [
  "printbridge-domain",
  "printbridge-ipc",
  "printbridge-provider-virtualbox",
+ "printbridge-provider-windows",
 ]
 
 [[package]]
@@ -47,6 +48,9 @@ dependencies = [
 [[package]]
 name = "printbridge-provider-windows"
 version = "0.1.0"
+dependencies = [
+ "printbridge-domain",
+]
 
 [[package]]
 name = "printbridgectl"

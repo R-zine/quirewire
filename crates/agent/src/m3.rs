@@ -241,6 +241,13 @@ impl<P: Hypervisor + UsbAccess> M3AgentService<P> {
                 dependency: "full bridge status".into(),
                 action: "M3 exposes vm status; full multi-provider status returns in M6.".into(),
             }),
+            Request::PrinterInstall
+            | Request::PrinterStatus
+            | Request::PrinterTestPage
+            | Request::PrinterRemove => Err(BridgeError::MissingDependency {
+                dependency: "Windows printing provider".into(),
+                action: "Use the M5 printer command handler.".into(),
+            }),
         }
     }
 }

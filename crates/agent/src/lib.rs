@@ -5,8 +5,10 @@
 //! M6.
 
 mod m3;
+mod m5;
 
 pub use m3::{M3_CONFIG_SCHEMA, M3AgentService, M3Config, m3_help_text};
+pub use m5::{M5_CONFIG_SCHEMA, M5AgentService, M5Config, m5_help_text};
 
 use printbridge_core::{Controller, fake::FakePlatform};
 use printbridge_domain::Platform;
@@ -55,7 +57,11 @@ impl<P: Platform> RequestHandler for AgentService<P> {
             | Request::UsbAttach
             | Request::UsbAttachAt(_)
             | Request::UsbRelease
-            | Request::UsbReleaseAt(_) => Response::Error {
+            | Request::UsbReleaseAt(_)
+            | Request::PrinterInstall
+            | Request::PrinterStatus
+            | Request::PrinterTestPage
+            | Request::PrinterRemove => Response::Error {
                 code: "unsupported_command".into(),
                 message: "The M2 fake handler does not implement M3 hardware commands.".into(),
             },

@@ -2,7 +2,8 @@ use std::path::Path;
 
 use crate::{
     BridgeError, ComponentStatus, DependencyInfo, DiagnosticEntry, OwnedVm, PrintJob, PrintQueue,
-    PrinterEndpoint, StartupRegistration, UsbDevice, UsbIdentity,
+    PrinterEndpoint, StartupRegistration, UsbDevice, UsbIdentity, WindowsPrintSubmission,
+    WindowsQueueStatus,
 };
 
 pub trait Hypervisor {
@@ -63,6 +64,11 @@ pub trait WindowsPrinting {
     fn remove_owned_queue(&mut self, name: &str) -> Result<(), BridgeError>;
     fn verify_driver(&self, name: &str) -> Result<(), BridgeError>;
     fn windows_queue_status(&self) -> Result<ComponentStatus, BridgeError>;
+    fn inspect_owned_queue(&self, name: &str) -> Result<WindowsQueueStatus, BridgeError>;
+    fn submit_windows_test_page(
+        &mut self,
+        name: &str,
+    ) -> Result<WindowsPrintSubmission, BridgeError>;
 }
 
 pub trait Startup {
