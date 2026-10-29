@@ -19,8 +19,12 @@ substitute for the physical acceptance gates in `SPEC.md`.
 - `m6/Invoke-M6SoftwareTests.ps1` checks the typed IPC allow-list, frame bound,
   owner-only pipe DACL, OS singleton, immutable state, bounded backoff,
   idempotency cache, exact M4 ownership, Task Scheduler safeguards, redaction,
-  PowerShell syntax, and absence of Tauri.
+  PowerShell syntax, and absence of Tauri from every headless crate.
+- `m7/Invoke-M7SoftwareTests.ps1` checks the Tauri/agent dependency boundary,
+  fixed desktop commands, tray exit semantics, CSP/capability, accessible UI
+  behavior through fake-client flows, frontend production build, and the
+  negative physical-gate recorder.
 - `cargo test --workspace --all-features` runs domain, state-machine, retry,
   telemetry, protocol, CLI, fake-contract, command-parser, ownership, USB, and
-  real-provider, secure-pipe, supervisor, and startup unit tests.
+  real-provider, secure-pipe, supervisor, startup, and desktop unit tests.
 

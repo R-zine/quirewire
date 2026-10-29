@@ -8,6 +8,7 @@ members = [
     "crates/ipc",
     "crates/agent",
     "crates/cli",
+    "apps/desktop/src-tauri",
 ]
 resolver = "3"
 

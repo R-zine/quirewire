@@ -15,6 +15,21 @@ jobs:
       - uses: actions/checkout@v4
       - name: Toolchain
         run: rustup show active-toolchain
+      - name: Node toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Frontend dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Frontend test
+        working-directory: apps/desktop
+        run: npm test
+      - name: Frontend build
+        working-directory: apps/desktop
+        run: npm run build
       - name: M3 PowerShell syntax
         shell: pwsh
         run: |

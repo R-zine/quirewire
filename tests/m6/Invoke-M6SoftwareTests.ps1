@@ -84,8 +84,8 @@ Check 'configuration directory ACL is protected' {
 Check 'diagnostics explicitly redact USB serial' {
     $diagnostics -match 'USB serial values.*intentionally omitted'
 }
-Check 'no Tauri dependency introduced' {
-    -not (Select-String -Path (Join-Path $repositoryRoot 'Cargo.toml'), (Join-Path $repositoryRoot 'crates\*\Cargo.toml') -Pattern 'tauri' -Quiet)
+Check 'headless crates have no Tauri dependency' {
+    -not (Select-String -Path (Join-Path $repositoryRoot 'crates\*\Cargo.toml') -Pattern 'tauri' -Quiet)
 }
 
 $negativeAcceptance = Join-Path $repositoryRoot "artifacts\m6\software-tests\acceptance-negative-$([guid]::NewGuid().ToString('N'))"

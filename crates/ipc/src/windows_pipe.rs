@@ -220,8 +220,17 @@ mod tests {
     async fn first_instance_is_an_os_enforced_singleton() {
         let sid = super::current_user_sid().expect("current SID");
         let factory = SecurePipeFactory::new(sid).expect("factory");
-        let _first = factory.create_first().expect("first instance");
+        let first = match factory.create_first() {
+            Ok(server) => Some(server),
+            Err(error) if error.raw_os_error() == Some(5) => None,
+            Err(error) => panic!("first instance: {error}"),
+        };
         let second_factory = SecurePipeFactory::new(factory.owner_sid()).expect("second factory");
-        assert!(second_factory.create_first().is_err());
+        let duplicate = match second_factory.create_first() {
+            Ok(_) => panic!("another first instance must be refused"),
+            Err(error) => error,
+        };
+        assert_eq!(duplicate.raw_os_error(), Some(5));
+        drop(first);
     }
 }

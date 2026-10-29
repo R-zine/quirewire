@@ -10,3 +10,8 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Tauri/React frontend output and dependencies.
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/src-tauri/gen/
+
