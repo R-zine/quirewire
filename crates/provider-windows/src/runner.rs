@@ -1,11 +1,16 @@
 use std::ffi::OsString;
 use std::io::Read;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use printbridge_domain::BridgeError;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandOutput {
@@ -33,7 +38,10 @@ impl CommandRunner for ProcessRunner {
         arguments: &[OsString],
         timeout: Duration,
     ) -> Result<CommandOutput, BridgeError> {
-        let mut child = Command::new(executable)
+        let mut command = Command::new(executable);
+        #[cfg(windows)]
+        command.creation_flags(CREATE_NO_WINDOW);
+        let mut child = command
             .args(arguments)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

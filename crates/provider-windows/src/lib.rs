@@ -30,6 +30,26 @@ pub const STARTUP_TASK_NAME: &str = "Agent";
 
 static CORRELATION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+fn discover_resource(relative: &[&str]) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(root) = env::var_os("PRINTBRIDGE_RESOURCE_ROOT") {
+        candidates.push(PathBuf::from(root));
+    }
+    if let Ok(executable) = env::current_exe()
+        && let Some(parent) = executable.parent()
+    {
+        candidates.extend(parent.ancestors().take(4).map(PathBuf::from));
+    }
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+
+    candidates.into_iter().find_map(|root| {
+        let candidate = relative
+            .iter()
+            .fold(root, |path, segment| path.join(segment));
+        candidate.is_file().then_some(candidate)
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct WindowsProviderConfig {
     pub powershell: PathBuf,
@@ -61,14 +81,17 @@ impl WindowsStartupProvider<ProcessRunner> {
         agent_config: impl Into<PathBuf>,
         owner_sid: impl Into<String>,
     ) -> Result<Self, BridgeError> {
-        let script = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../scripts/m6/windows/Invoke-M6Startup.ps1");
-        if !script.is_file() {
-            return Err(BridgeError::MissingDependency {
-                dependency: script.display().to_string(),
-                action: "Restore the tracked M6 startup provider script.".into(),
-            });
-        }
+        let script = discover_resource(&[
+            "scripts",
+            "m6",
+            "windows",
+            "Invoke-M6Startup.ps1",
+        ])
+        .ok_or_else(|| BridgeError::MissingDependency {
+            dependency: "PrintBridge startup provider resource".into(),
+            action: "Repair the PrintBridge installation or restore the tracked M6 startup provider script."
+                .into(),
+        })?;
         Ok(Self::new(WindowsStartupConfig {
             powershell: PathBuf::from("powershell.exe"),
             script,
@@ -204,17 +227,19 @@ impl WindowsPrintProvider<ProcessRunner> {
             .unwrap_or_else(|| PathBuf::from("powershell.exe"));
         let script = env::var_os("PRINTBRIDGE_WINDOWS_PROVIDER_SCRIPT")
             .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../scripts/m5/windows/Invoke-M5WindowsPrinting.ps1")
-            });
-        if !script.is_file() {
-            return Err(BridgeError::MissingDependency {
-                dependency: script.display().to_string(),
-                action: "Restore the tracked M5 Windows provider script or set PRINTBRIDGE_WINDOWS_PROVIDER_SCRIPT."
+            .or_else(|| {
+                discover_resource(&[
+                    "scripts",
+                    "m5",
+                    "windows",
+                    "Invoke-M5WindowsPrinting.ps1",
+                ])
+            })
+            .ok_or_else(|| BridgeError::MissingDependency {
+                dependency: "PrintBridge Windows printing provider resource".into(),
+                action: "Repair the PrintBridge installation or set PRINTBRIDGE_WINDOWS_PROVIDER_SCRIPT."
                     .into(),
-            });
-        }
+            })?;
         let state_path = PathBuf::from(local_app_data)
             .join("PrintBridge")
             .join("m5-windows-printer.json");

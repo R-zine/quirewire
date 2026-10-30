@@ -24,6 +24,10 @@ substitute for the physical acceptance gates in `SPEC.md`.
   fixed desktop commands, tray exit semantics, CSP/capability, accessible UI
   behavior through fake-client flows, frontend production build, and the
   negative physical-gate recorder.
+- `m8/Invoke-M8SoftwareTests.ps1` checks NSIS/current-user packaging, scoped
+  one-time printer elevation, non-console background execution, fixed resource
+  discovery, exact ownership cleanup, bounded data deletion, configuration
+  migration, explicit signing choice, and licensing/resource disclosures.
 - `cargo test --workspace --all-features` runs domain, state-machine, retry,
   telemetry, protocol, CLI, fake-contract, command-parser, ownership, USB, and
   real-provider, secure-pipe, supervisor, startup, and desktop unit tests.

@@ -30,6 +30,9 @@ jobs:
       - name: Frontend build
         working-directory: apps/desktop
         run: npm run build
+      - name: M8 packaging safety
+        shell: pwsh
+        run: ./tests/m8/Invoke-M8SoftwareTests.ps1
       - name: M3 PowerShell syntax
         shell: pwsh
         run: |

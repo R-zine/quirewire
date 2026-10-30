@@ -1,0 +1,31 @@
+name: installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned-development-installer:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Test packaging safety
+        shell: pwsh
+        run: ./tests/m8/Invoke-M8SoftwareTests.ps1
+      - name: Build explicitly unsigned development installer
+        shell: pwsh
+        run: ./scripts/m8/windows/Build-M8Installer.ps1 -UnsignedDevelopmentBuild
+      - name: Upload clearly labeled development artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrintBridge-UNSIGNED-DEVELOPMENT
+          path: target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
