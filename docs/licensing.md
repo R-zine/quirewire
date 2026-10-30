@@ -1,7 +1,9 @@
 # Packaging and redistribution boundary
 
 This is an engineering inventory, not legal advice. It was last reviewed on
-2026-10-29 and must be reviewed again before any public release.
+2026-10-30 and must be reviewed again before any public release. M9 adds only
+repository PowerShell validation tools and documentation; it adds no runtime or
+redistributed third-party binary.
 
 | Component | M8 treatment | Reason / source |
 |---|---|---|
@@ -13,6 +15,7 @@ This is an engineering inventory, not legal advice. It was last reviewed on
 | CUPS and distro packages | Built into owner-local/base appliance, subject to package notices | Package license/copyright files remain the source of truth. No separate binary is copied into the Windows installer. |
 | Brother DCP-L2600D driver and legacy USB patch | **Owner-local only; never bundled** | The repository has hashes and official download pages but no verified grant allowing PrintBridge to redistribute these vendor binaries. The owner downloads and accepts Brother's terms directly. |
 | Configured Brother appliance | **Owner-local only; never bundled** | It contains the Brother binaries above. `*.ova`, `*.vdi`, vendor packages, keys, and serials remain ignored artifacts. |
+| SumatraPDF M9 test tool | Owner-local test artifact only; never bundled | The reference host uses the official portable, Authenticode-valid executable only because Chrome exposes no unattended explicit-printer verb. Re-review its GPL terms/source before any different use. [SumatraPDF](https://www.sumatrapdfreader.org/) |
 
 The M8 setup executable therefore contains only PrintBridge executables,
 PowerShell lifecycle/provider scripts, guest build source, manifests, and

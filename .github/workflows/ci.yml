@@ -33,6 +33,9 @@ jobs:
       - name: M8 packaging safety
         shell: pwsh
         run: ./tests/m8/Invoke-M8SoftwareTests.ps1
+      - name: M9 release-candidate safety
+        shell: pwsh
+        run: ./tests/m9/Invoke-M9SoftwareTests.ps1
       - name: M3 PowerShell syntax
         shell: pwsh
         run: |

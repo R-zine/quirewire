@@ -273,12 +273,13 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 
 **Implement:**
 
-- Windows integration test suite + manual hardware test matrix. Baseline VM memory, agent RSS/CPU, cold startup, print latency, time to recover after disconnect, and disk growth; compare against accepted targets.
-- Test at least: 20 sequential text/PDF jobs; long PDF; device unplug during idle and during print; host reboot; VM crash; sleep/resume; Windows spooler restart; CUPS restart; no paper; port conflict; second PrintBridge instance; uninstall/reinstall; UI closed; low disk space.
+- Windows integration test suite + a bounded manual hardware matrix. Baseline VM memory, agent RSS/CPU, cold startup, print latency, idle-disconnect recovery, and disk growth; compare against accepted targets.
+- The M9 release gate requires: 20 sequential text/PDF jobs; a long PDF; device unplug/reconnect while idle; VM crash; Windows spooler restart; CUPS restart; port conflict; second PrintBridge instance; low-disk guard; and cold start. These checks exercise the release-candidate print path and recovery behavior without repeatedly consuming paper for every environmental stress case.
+- Keep USB-during-print, host-reboot, sleep/resume, and no-paper scripts as optional, non-gating stress checks. Do not require M9 repeats of normal-app text/PDF, uninstall/reinstall, or UI-closed printing while the applicable M0/M5, M8, and M6 physical gates remain valid and M9 has not changed product binaries. Never report a deferred check as passed unless it was actually run.
 - Clearly identify which outcomes cannot be reliably automatically detected (e.g., a physically printed page with no printer telemetry).
 - Write end-user install/usage/troubleshooting guide, developer build/test guide, security and licensing notes, known limitations, and release checklist.
 
-**PASS:** Physical end-to-end regression set passes with evidence; no hidden background crashes/leaks or data loss; status is truthful; polished UI and documented installer are usable by someone who has never seen VirtualBox.
+**PASS:** The bounded physical end-to-end regression gate passes with evidence; prior applicable physical milestone gates remain valid; deferred stress checks are disclosed rather than claimed; no hidden background crashes/leaks or data loss appears in the required workload; status is truthful; polished UI and documented installer are usable by someone who has never seen VirtualBox.
 
 ## 5. Proposed performance targets (measure, do not assume)
 

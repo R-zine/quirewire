@@ -28,6 +28,10 @@ substitute for the physical acceptance gates in `SPEC.md`.
   one-time printer elevation, non-console background execution, fixed resource
   discovery, exact ownership cleanup, bounded data deletion, configuration
   migration, explicit signing choice, and licensing/resource disclosures.
+- `m9/Invoke-M9SoftwareTests.ps1` checks the mixed-job fixture generator,
+  exact-owner Notepad/PDF application boundary, redacted metrics, bounded recovery scenarios,
+  non-destructive low-disk simulation, complete physical matrix, documentation,
+  and negative hardware-gate recorders.
 - `cargo test --workspace --all-features` runs domain, state-machine, retry,
   telemetry, protocol, CLI, fake-contract, command-parser, ownership, USB, and
   real-provider, secure-pipe, supervisor, startup, and desktop unit tests.

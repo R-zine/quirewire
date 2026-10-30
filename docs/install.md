@@ -93,3 +93,7 @@ If the owned queue is the Windows default, choose another default first. Any
 ownership mismatch aborts uninstall before broad cleanup. VirtualBox itself,
 printer drivers/ports, unrelated queues, other VMs, and user documents are never
 removed.
+
+After installation, continue with [usage.md](usage.md). See
+[troubleshooting.md](troubleshooting.md) for recovery and
+[known-limitations.md](known-limitations.md) for the supported boundary.

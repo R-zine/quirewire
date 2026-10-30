@@ -1,6 +1,6 @@
 # PrintBridge
 
-PrintBridge has completed milestones M0 through M5:
+PrintBridge has completed milestones M0 through M9:
 
 - **M0 — feasibility:** `PASS: PHYSICAL`
 - **M1 — manual VM/USB/CUPS spike:** `PASS: PHYSICAL`
@@ -9,6 +9,12 @@ PrintBridge has completed milestones M0 through M5:
   INTEGRATION + OWNER-GATED USB`
 - **M4 — reproducible Linux appliance and guest management:** `PASS: PHYSICAL`
 - **M5 — Windows IPP printer integration:** `PASS: PHYSICAL`
+
+- **M6 — headless supervisor, IPC, recovery:** `PASS: PHYSICAL`
+- **M7 — Tauri desktop and tray:** `PASS: PHYSICAL`
+- **M8 — installer, repair, uninstallation:** `PASS: PHYSICAL`
+- **M9 — soak/observability/release candidate:** `PASS: PHYSICAL` (bounded
+  10-scenario gate; seven optional stress repeats are explicitly deferred)
 
 The proven product path remains:
 
@@ -55,6 +61,8 @@ cargo run --quiet -p printbridgectl -- --config .\scripts\m5\m5.conf printer tes
 cargo run --quiet -p printbridgectl -- --config .\scripts\m5\m5.conf printer remove
 ```
 
-See [`scripts/m5/README.md`](scripts/m5/README.md) for the physical text/PDF,
-restart, independent-removal and final-reinstall gate. The persistent named-pipe
-agent and GUI remain later sequential milestones and do not start until M5 passes.
+For normal operation, see [`docs/usage.md`](docs/usage.md). Installation and
+repair are in [`docs/install.md`](docs/install.md); troubleshooting, security,
+known limitations, developer tests, and the release checklist are under
+[`docs/`](docs/). The M9 physical matrix and measurement commands are in
+[`scripts/m9/README.md`](scripts/m9/README.md).
