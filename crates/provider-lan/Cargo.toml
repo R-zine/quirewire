@@ -1,0 +1,13 @@
+[package]
+name = "printbridge-provider-lan"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+mdns-sd.workspace = true
+printbridge-domain.workspace = true
+
+[lints]
+workspace = true

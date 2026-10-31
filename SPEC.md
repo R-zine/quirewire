@@ -1,5 +1,11 @@
 # PrintBridge — Codex Implementation Specification
 
+> **M10 direction change (2026-10-30):** PrintBridge is now an on-demand
+> household-LAN bridge. This section and the M10 milestone supersede earlier
+> M6–M9 requirements for login startup, UI-independent operation, loopback-only
+> printing, and “Exit UI”. Historical milestone reports remain evidence of what
+> was tested at the time; they are not the current lifecycle contract.
+
 **Status:** Proposed engineering specification; hardware feasibility is **NOT YET VERIFIED**.  
 **Target:** Windows 11 x64 host, USB-connected legacy Brother multifunction printer, Linux-supported print function.  
 **Initial delivery:** Single-user, one printer, one Windows machine.  
@@ -29,21 +35,22 @@ This repository should be developed **one independently verifiable milestone at 
 
 ### User story
 
-A user plugs in a USB printer that works with Linux but no longer works with vendor Windows drivers, installs PrintBridge, chooses the USB device once, and obtains a printer named `Brother via PrintBridge` in Windows. From then on, printing from ordinary Windows apps works with no VM window. The bridge starts automatically at Windows login, survives closing the desktop application, displays useful errors, and can be cleanly uninstalled.
+A user plugs in a USB printer that works with Linux but no longer works with vendor Windows drivers, installs PrintBridge, chooses the USB device once, and obtains a printer named `Brother via PrintBridge` in Windows. When the user opens PrintBridge, its headless VM starts and the printer becomes available both to Windows and to phones/computers on the same trusted local network. Closing the window to the tray keeps sharing active; explicit Exit stops discovery, the agent, and the VM so they consume no ongoing memory. The app displays useful errors and can be cleanly uninstalled.
 
 ### Must-have outcomes
 
 - Standard Windows print queue, using Windows' **built-in IPP class driver** if the feasibility gate confirms compatibility.
 - Linux guest owns the **entire selected USB device** through VirtualBox USB passthrough and drives printing through CUPS and a functional Linux printer driver.
-- Engine starts headlessly on login and operates when the UI is closed; Windows session must remain logged in for MVP (pre-login/system-service printing is explicitly not promised).
+- Engine starts only when the desktop app launches. No login task or persistent background engine is allowed. Closing the window to the tray keeps the app running; explicit Exit or loss of the desktop heartbeat stops the VM and sharing.
 - One-click onboarding after prerequisites are installed, one-time user approval for selecting/capturing the USB device, readable health status, recovery after printer reconnect/reboot, and a test-page action.
 - Idempotent installation and setup, safe repair, controlled restart, diagnostics export, clean uninstallation preserving third-party assets.
-- No Brother-specific Windows printer driver required, no exposure of CUPS or control APIs to the LAN, no persistent VM management UI.
+- No Brother-specific Windows printer driver required. Expose only the selected IPP queue on one explicitly approved Windows interface and IPv4 subnet; never expose CUPS administration, SSH, named-pipe control, or arbitrary guest services to the LAN.
+- Advertise the queue with DNS-SD (`_ipp._tcp`) using capabilities actually reported by CUPS so AirPrint/Mopria-compatible clients can discover it while PrintBridge is running.
 
 ### Non-goals for v1
 
 - Scanner/fax support; printing is the only mandatory function of the multifunction device.
-- Multiple printers, household LAN sharing, Windows-on-ARM, pre-login printing, cloud printing, remote administration.
+- Multiple printers, Windows-on-ARM, pre-login/login-start printing, cloud printing, remote administration, routed/VPN/internet printing, or unapproved/broad Public-profile sharing.
 - Writing a Windows kernel printer driver, custom port monitor, or new IPP implementation for v1.
 - Promising support for every Brother/USB printer, full vendor print-options parity, or rescuing a broken Windows print spooler in all cases.
 - Silently downloading/repackaging Brother vendor driver binaries without checking source and redistribution terms.
@@ -67,28 +74,30 @@ Rust PrintBridge Agent (background, non-UI)
   +-- UsbProvider        (initial: VirtualBox USB host discovery/filter)
   +-- GuestPrinter       (CUPS IPP + guest provisioning/diagnostics)
   +-- WindowsPrinter     (Windows PrintManagement/IPP adapter)
-  +-- StartupProvider    (Windows Task Scheduler per-user)
+  +-- LanProvider        (approved interface/subnet policy + DNS-SD)
              |
      VirtualBox headless Linux guest
      CUPS shared printer + working Linux driver
              |
      captured USB Brother multifunction device
 
-Windows applications --> Windows inbox IPP queue
-                  --> loopback-only VirtualBox NAT forward
-                  --> guest CUPS queue --> Linux driver --> USB printer
+Windows applications --> Windows inbox IPP queue --> loopback NAT forward --+
+Phones/LAN devices --> DNS-SD + approved-interface/subnet IPP forward -------+
+                                                                           v
+                         guest CUPS queue --> Linux driver --> USB printer
 ```
 
 **Hard architectural rule:** UI does not import VirtualBox, printer setup scripts, or USB code. `printbridgectl` also talks to the same agent API. Provider implementations cannot import the UI crate. Rust domain/core crates contain no Tauri symbols.
 
 ### Service model
 
-- `printbridge-agent.exe`: per-user background supervisor, started by a **Task Scheduler task at user logon**, irrespective of whether the UI launches. Document that logoff may terminate this mode; test behavior while session is locked.
+- `printbridge-agent.exe`: per-user on-demand supervisor launched hidden by the desktop. It holds a renewable desktop heartbeat lease and shuts down sharing plus the owned VM if the lease expires.
 - `printbridgectl.exe`: development/debug CLI and scriptable control client.
-- `printbridge-desktop.exe`: Tauri UI/tray client; quitting it leaves the agent + VM running.
+- `printbridge-desktop.exe`: Tauri UI/tray owner. Window close hides to the tray; explicit Exit sends graceful shutdown and does not exit silently if VM shutdown fails.
 - Use a versioned **Windows named pipe** for command/status IPC with ACL restricted to the owning user SID; avoid public HTTP control endpoints. A polling API is sufficient initially, with optional event streaming after the model stabilizes.
 - Only the selected VM is managed. Track its UUID and ownership marker, never operate by ambiguous display name alone.
 - The agent reconciles desired/observed state after startup or failure and uses bounded backoff, not tight polling.
+- The installer and agent remove the exact legacy PrintBridge login task. They never create a replacement startup entry.
 
 ### Concrete module layout
 
@@ -100,6 +109,7 @@ printbridge/
     core/                     # orchestrator, state machine, reconciliation
     provider-virtualbox/      # VBoxManage process adapter and parsing
     provider-cups/            # IPP health/jobs, Linux guest management
+    provider-lan/             # scoped DNS-SD IPP advertisement
     provider-windows/         # Windows IPP printer/USB/system integration
     ipc/                      # versioned named-pipe protocol
     agent/                    # background executable
@@ -124,19 +134,23 @@ Define small Rust traits behind provider boundaries, with async behavior only wh
 - `UsbAccess`: `list_devices`, `capture_selected`, `release_selected`, `attachment_status`; persist VID:PID and serial when available, not mutable USB bus address alone.
 - `GuestPrinting`: `probe_ipp`, `list_queues`, `queue_status`, `submit_test_page`, `jobs`, `diagnostics`.
 - `WindowsPrinting`: `detect_ipp_support`, `register_owned_queue`, `list_owned_queues`, `remove_owned_queue`, `verify_driver`.
-- `Startup`: `enable_login_start`, `disable_login_start`, `verify_registration`.
+- `Startup`: retained only to disable/verify absence of the legacy owned login task; M10 must never call `enable_login_start`.
+- LAN policy/discovery: verify one explicitly approved active default-route IPv4 interface and subnet, verify exact firewall rules, publish/unpublish the queue, and expose truthful status including the Windows network category.
 
 Avoid building a general plugin runtime. Interfaces exist to isolate vendor APIs and make fakes possible. Keep subprocess invocation centralized with argument-vector construction, no string-formatted shell commands, bounded timeouts, and captured stderr.
 
 ### Status model
 
-Store **component states separately** (hypervisor, guest boot, USB, CUPS, Windows queue); derive an overall UI status. Example: `NotConfigured`, `Provisioning`, `Starting`, `WaitingForUsb`, `Connecting`, `Ready`, `Degraded`, `Error`, `Stopping`. Distinguish an IPP job being **accepted**, **completed by CUPS**, and **physically printed**; software cannot infer the last without a hardware test or reliable device feedback.
+Store **component states separately** (hypervisor, guest boot, USB, CUPS, Windows queue, LAN sharing); derive an overall UI status. Report selected interface/address/IPP endpoint and whether DNS-SD is active without exposing secrets. Example: `NotConfigured`, `Provisioning`, `Starting`, `WaitingForUsb`, `Connecting`, `Ready`, `Degraded`, `Error`, `Stopping`. Distinguish an IPP job being **accepted**, **completed by CUPS**, and **physically printed**; software cannot infer the last without a hardware test or reliable device feedback.
 
 ### Networking and security
 
-- Default: guest NIC in VirtualBox NAT mode, loopback-only host port forward `127.0.0.1:<chosen-port>` → guest `631`. Reserve a stable available port, persist it, and verify the IPP URI Windows actually installs. Do **not** assume `localhost` succeeds with Windows' print-stack validation or CUPS's advertised `printer-uri-supported` attributes.
+- Keep the existing loopback-only NAT forward `127.0.0.1:<chosen-port>` → guest `631` for the owned Windows queue.
+- While the app is running, add one separately marker-owned NAT rule bound to the IPv4 address of the explicitly approved active default-route Windows interface and the same stable port. The approved subnet must be a canonical directly attached local IPv4 CIDR.
+- Allow inbound TCP IPP only for the exact `VBoxHeadless.exe`, and inbound UDP 5353 only for the exact agent executable. Both rules must be constrained to `Profile=Private,Public`, the exact approved interface alias, and the exact approved remote subnet; never use `Any` or `LocalSubnet`. Scope mDNS to the same IPv4 interface and publish `_ipp._tcp.local.` only after USB and CUPS are ready.
+- A Public category is allowed only through that explicit interface/subnet exception; it does not authorize any other Public interface, subnet, port, or program. If approval is absent, the approved interface is inactive/not the default route, or its address leaves the approved subnet, stop DNS-SD and remove the owned LAN NAT rule while preserving local Windows printing. On explicit Exit, stop DNS-SD, gracefully stop the VM, remove the LAN forward, and exit the agent. Uninstall removes only exact marker-owned firewall rules.
 - If loopback-forwarded IPP fails for a protocol/URI reason, test a private host-only adapter with stable guest IP as the documented fallback. Keep the alternative behind `PrinterEndpoint`/network configuration rather than hardcoding it everywhere.
-- Do not enable CUPS `--remote-any` on arbitrary interfaces, expose CUPS's admin UI on the LAN, or open inbound internet firewall rules.
+- Keep the CUPS `--no-remote-admin --no-remote-any` baseline, then add one marker-delimited guest rule allowing only `/printers/PrintBridge_DCP_L2600D` through the scoped host forward. Keep `/`, `/admin`, SSH, and every other guest service remote-denied; never open inbound internet/Any-profile firewall rules.
 - Optional guest SSH management must bind only to Windows loopback, use per-install keys with restrictive ACLs, and never permit remote password login. Avoid retaining provisioning secrets.
 - Never allow a user-supplied printer name, URL, or USB descriptor to become an unescaped shell expression. Verify downloads by trusted source/checksum and minimize guest packages.
 
@@ -281,11 +295,27 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 
 **PASS:** The bounded physical end-to-end regression gate passes with evidence; prior applicable physical milestone gates remain valid; deferred stress checks are disclosed rather than claimed; no hidden background crashes/leaks or data loss appears in the required workload; status is truthful; polished UI and documented installer are usable by someone who has never seen VirtualBox.
 
+### M10 — On-demand trusted-LAN sharing (CURRENT PRODUCT CONTRACT)
+
+**Implement:**
+
+- Migrate lifecycle ownership from Task Scheduler to the desktop: launch the agent hidden when the app opens, start/reconcile the VM, maintain a bounded heartbeat lease, keep sharing when the window is hidden to tray, and gracefully stop the VM/agent on explicit Exit. Remove the exact legacy login task during install, repair, setup and agent launch.
+- Preserve the existing loopback Windows IPP queue. Add a separate exact-owned VirtualBox NAT rule bound only to the active IPv4 address of an explicitly approved default-route interface/subnet while sharing is active; remove it when approval no longer matches or on stop.
+- Add exact marker-owned Windows Firewall rules for TCP IPP and UDP mDNS, restricted to `Profile=Private,Public`, the exact approved interface alias, exact approved remote subnet, executable, protocol and port. Installation/removal may use one-time scoped elevation; the persistent desktop/agent remains unelevated. Public-category support is this narrow exception only.
+- Query CUPS for make/model, formats, UUID, URF, color and duplex support. Advertise `_ipp._tcp.local.` with the AirPrint `_universal` subtype only on the explicitly approved interface and only while the queue is ready. Never advertise unsupported capabilities.
+- Update protocol/status/UI, installer/repair/uninstall, diagnostics, security/usage/troubleshooting docs, and software tests. Preserve all ownership/collision refusals.
+
+**Software gate:** Protocol/provider/unit/frontend tests pass; PowerShell parses; missing/mismatched approval produces an actionable unavailable status and no LAN advertisement/forward; exact firewall interface/subnet/program/port scope, NAT ownership, and cleanup are tested; the legacy login task is absent.
+
+**Physical gate (bounded):** With the active Windows interface and directly attached local subnet explicitly approved (the reference host is `Ethernet 3`, `192.168.100.0/24`, category Public) and one phone/computer on that same non-isolated LAN: open PrintBridge; confirm the device discovers `Brother via PrintBridge`; print one small page from that LAN device and confirm physical output; explicitly Exit; confirm the VM and agent stop and the LAN printer becomes unavailable. No M11 work or M10 commit before this physical result is recorded.
+
+**PASS:** `PASS: PHYSICAL` only after the bounded LAN print and explicit-exit checks above. Otherwise report `BLOCKED: REQUIRES HARDWARE` even if every software test passes.
+
 ## 5. Proposed performance targets (measure, do not assume)
 
 - Start from 1 vCPU, **~768 MiB RAM** guest allocation; experiment with 512 MiB once printing is stable. Do not under-provision below what the actual driver/CUPS needs.
 - Idle background Rust agent: aim **<50 MiB resident memory** and negligible steady-state CPU on reference Windows machine; measure actual process tree. This is a goal, not a prerequisite to functionality.
-- Desktop UI: may be closed permanently; no impact on print availability.
+- Desktop window may be hidden to tray with no impact on print availability. Explicitly exiting the desktop intentionally stops print availability and VM memory use.
 - Guest VM dominates total footprint: track allocated VM RAM, total VirtualBox process RSS, and persistent image disk footprint. Set measured budget after M1 rather than fabricating benchmarks.
 - Reasonable cold-start/recovery times are optimization targets; correctness, resilience and clean recovery win over premature optimization.
 
@@ -309,14 +339,16 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 | Windows prints text through Linux with inbox IPP | physically yes | physically yes | automated setup + physically yes |
 | Windows prints PDF/image | physically yes | physically yes | physically yes |
 | USB device captured and released safely | n/a | manual | automatic/repairable |
-| VM/headless app runs without desktop UI | n/a | manually | yes |
+| Window hidden to tray keeps sharing | n/a | manually | yes |
 | Reconnect after unplug | n/a | documented spike | automatic or actionable recovery |
-| Windows login autostart | n/a | n/a | yes |
+| No Windows login autostart/background VM | n/a | n/a | yes |
+| Explicitly approved same-LAN phone/device discovery and print | n/a | n/a | physically yes |
+| Missing/mismatched LAN approval refusal | n/a | n/a | software + manual yes |
 | GUI setup/status/diagnostics | n/a | n/a | yes |
 | Clean uninstall without collateral deletion | n/a | n/a | yes |
 | Resource budget and soak test | n/a | baseline | measured/passed |
 
-**Definition of done:** A nondeveloper on the supported Windows host can install/configure PrintBridge, close its window, select `Brother via PrintBridge` in Notepad or PDF reader and reliably print a real page. The project reports status honestly, recovers from expected disconnects, starts on login, and uninstalls cleanly. Claims about the printer model and compatibility are limited to actually tested hardware.
+**Definition of done:** A nondeveloper on the supported Windows host can install/configure and open PrintBridge, hide its window to the tray, select `Brother via PrintBridge` in Windows or discover it from a phone on the explicitly approved same LAN, and reliably print a real page. Explicit Exit stops the VM/agent and sharing. The project reports status honestly, refuses exposure beyond the approved interface/subnet, recovers from expected disconnects, does not start on login, and uninstalls cleanly. Claims about the printer model and compatibility are limited to actually tested hardware.
 
 ## 8. Human-in-the-loop reporting format
 
@@ -344,7 +376,11 @@ Recheck current documentation against the versions installed at implementation t
 - Microsoft IPP Class Driver: https://learn.microsoft.com/en-us/universal-print/fundamentals/universal-print-connector-with-ipp
 - Microsoft Windows Protected Print Mode: https://learn.microsoft.com/en-us/windows/modern-print/windows-protected-print-mode/windows-protected-print-mode
 - Oracle VirtualBox USB capture: https://docs.oracle.com/en/virtualization/virtualbox/7.1/user/BasicConcepts.html
-- Oracle VirtualBox networking: https://docs.oracle.com/en/virtualization/virtualbox/7.1/user/networkingdetails.html
+- Oracle VirtualBox networking: https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/networkingdetails.html
+- Microsoft `New-NetFirewallRule`: https://learn.microsoft.com/powershell/module/netsecurity/new-netfirewallrule
+- Apple Bonjour overview: https://developer.apple.com/bonjour/
+- Apple Bonjour Printing Specification: https://devimages.apple.com/opensource/BonjourPrinting.pdf
+- Rust `mdns-sd` API: https://docs.rs/mdns-sd/
 - Oracle VBoxManage CLI: https://docs.oracle.com/en/virtualization/virtualbox/7.1/user/vboxmanage.html
 - Tauri v2 architecture: https://v2.tauri.app/concept/architecture/
 - WSL alternative USB forwarding for later ADR: https://github.com/dorssel/usbipd-win

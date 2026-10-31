@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -8,7 +9,7 @@ use printbridge_ipc::{
 };
 use serde::Serialize;
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(75);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DesktopError {
@@ -35,8 +36,18 @@ impl DesktopError {
             code: "agent_unavailable".into(),
             message: message.into(),
             action: Some(
-                "Wait for Windows startup to launch the agent, or run the PrintBridge startup task, then try again."
-                    .into(),
+                "Keep PrintBridge open while its on-demand engine starts, then try again.".into(),
+            ),
+            retryable: true,
+        }
+    }
+
+    pub(crate) fn runtime(message: impl Into<String>) -> Self {
+        Self {
+            code: "desktop_runtime_error".into(),
+            message: message.into(),
+            action: Some(
+                "Repair PrintBridge and verify the installed agent and configuration.".into(),
             ),
             retryable: true,
         }
@@ -68,6 +79,8 @@ impl From<WireError> for DesktopError {
 #[derive(Clone, Default)]
 pub struct AgentClient {
     sequence: Arc<AtomicU64>,
+    #[cfg(windows)]
+    owner_sid: Arc<OnceLock<String>>,
 }
 
 impl AgentClient {
@@ -112,12 +125,20 @@ impl AgentClient {
 
         #[cfg(windows)]
         let response = {
-            let sid = printbridge_ipc::windows_pipe::current_user_sid().map_err(|error| {
-                DesktopError::unavailable(format!(
-                    "Cannot identify the current Windows user: {error}"
-                ))
-            })?;
-            let pipe_name = printbridge_ipc::windows_pipe::pipe_name_for_sid(&sid);
+            let sid = if let Some(value) = self.owner_sid.get() {
+                value
+            } else {
+                let value = printbridge_ipc::windows_pipe::current_user_sid().map_err(|error| {
+                    DesktopError::unavailable(format!(
+                        "Cannot identify the current Windows user: {error}"
+                    ))
+                })?;
+                let _ = self.owner_sid.set(value);
+                self.owner_sid.get().ok_or_else(|| {
+                    DesktopError::unavailable("Cannot cache the Windows owner SID.")
+                })?
+            };
+            let pipe_name = printbridge_ipc::windows_pipe::pipe_name_for_sid(sid);
             printbridge_ipc::windows_pipe::send(&pipe_name, &request, REQUEST_TIMEOUT).await?
         };
 

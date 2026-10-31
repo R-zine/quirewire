@@ -25,6 +25,16 @@ pub struct CupsIppProvider {
     next_request_id: AtomicU32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrinterAdvertisement {
+    pub make_model: String,
+    pub formats: Vec<String>,
+    pub urf: Vec<String>,
+    pub uuid: String,
+    pub color: bool,
+    pub duplex: bool,
+}
+
 impl CupsIppProvider {
     #[must_use]
     pub fn new(endpoint: PrinterEndpoint, timeout: Duration) -> Self {
@@ -53,12 +63,68 @@ impl CupsIppProvider {
             "printer-is-accepting-jobs",
             "printer-make-and-model",
             "queued-job-count",
+            "document-format-supported",
+            "urf-supported",
+            "printer-uuid",
+            "color-supported",
+            "sides-supported",
         ];
         request.attribute(0x44, "requested-attributes", requested[0].as_bytes());
         for attribute in &requested[1..] {
             request.additional_value(0x44, attribute.as_bytes());
         }
         self.send(endpoint, request.finish(&[]))
+    }
+
+    /// Returns only capabilities CUPS actually reports. These values are used
+    /// verbatim (after size/syntax filtering) in the DNS-SD TXT record.
+    pub fn advertisement(&self) -> Result<PrinterAdvertisement, BridgeError> {
+        let response = self.get_printer_attributes(&self.endpoint)?;
+        let make_model = response
+            .first_text("printer-make-and-model")
+            .ok_or_else(|| ipp_error(&self.endpoint, "printer make/model was absent"))?;
+        let formats: Vec<String> = response
+            .texts("document-format-supported")
+            .into_iter()
+            .filter(|value| {
+                value.len() <= 80
+                    && value.bytes().all(|byte| byte.is_ascii_graphic())
+                    && (value.starts_with("application/") || value.starts_with("image/"))
+            })
+            .collect();
+        if formats.is_empty() {
+            return Err(ipp_error(
+                &self.endpoint,
+                "no DNS-SD-safe document formats were reported",
+            ));
+        }
+        let uuid = response
+            .first_text("printer-uuid")
+            .filter(|value| value.starts_with("urn:uuid:") && value.len() <= 64)
+            .ok_or_else(|| ipp_error(&self.endpoint, "printer UUID was absent or invalid"))?;
+        let urf = response
+            .texts("urf-supported")
+            .into_iter()
+            .filter(|value| {
+                !value.is_empty()
+                    && value.len() <= 32
+                    && value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+            })
+            .collect();
+        let duplex = response
+            .texts("sides-supported")
+            .iter()
+            .any(|value| value.starts_with("two-sided-"));
+        Ok(PrinterAdvertisement {
+            make_model,
+            formats,
+            urf,
+            uuid,
+            color: response.first_boolean("color-supported").unwrap_or(false),
+            duplex,
+        })
     }
 
     fn ensure_queue(&self, queue: &str) -> Result<(), BridgeError> {
@@ -804,6 +870,26 @@ mod tests {
             (0x23, "printer-state", 3_i32.to_be_bytes().to_vec()),
             (0x22, "printer-is-accepting-jobs", vec![1]),
             (0x44, "printer-state-reasons", b"none".to_vec()),
+            (
+                0x49,
+                "document-format-supported",
+                b"application/pdf".to_vec(),
+            ),
+            (
+                0x49,
+                "document-format-supported",
+                b"image/pwg-raster".to_vec(),
+            ),
+            (0x44, "urf-supported", b"V1.4".to_vec()),
+            (0x44, "urf-supported", b"W8".to_vec()),
+            (
+                0x45,
+                "printer-uuid",
+                b"urn:uuid:26263578-aca1-3e00-66bb-590c653b6fe7".to_vec(),
+            ),
+            (0x22, "color-supported", vec![0]),
+            (0x44, "sides-supported", b"one-sided".to_vec()),
+            (0x44, "sides-supported", b"two-sided-long-edge".to_vec()),
         ])
     }
 
@@ -837,6 +923,23 @@ mod tests {
         let queues = provider.list_queues().expect("queue listing");
         assert_eq!(queues[0].name, "PrintBridge_DCP_L2600D");
         assert_eq!(queues[0].driver, "Brother DCP-L2600D");
+        handle.join().expect("fixture thread");
+    }
+
+    #[test]
+    fn advertisement_uses_only_reported_ipp_capabilities() {
+        let (port, handle) = serve_once(printer_attributes());
+        let provider = CupsIppProvider::new(endpoint(port), Duration::from_secs(2));
+        let advertisement = provider.advertisement().expect("advertisement");
+        assert_eq!(advertisement.make_model, "Brother DCP-L2600D");
+        assert_eq!(
+            advertisement.formats,
+            ["application/pdf", "image/pwg-raster"]
+        );
+        assert_eq!(advertisement.urf, ["V1.4", "W8"]);
+        assert!(!advertisement.color);
+        assert!(advertisement.duplex);
+        assert!(advertisement.uuid.starts_with("urn:uuid:"));
         handle.join().expect("fixture thread");
     }
 

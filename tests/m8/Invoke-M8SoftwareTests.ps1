@@ -48,6 +48,8 @@ $builder = Get-Content -Raw (Join-Path $repositoryRoot 'scripts\m8\windows\Build
 $provider = Get-Content -Raw (Join-Path $repositoryRoot 'crates\provider-windows\src\lib.rs')
 $windowsRunner = Get-Content -Raw (Join-Path $repositoryRoot 'crates\provider-windows\src\runner.rs')
 $virtualBoxRunner = Get-Content -Raw (Join-Path $repositoryRoot 'crates\provider-virtualbox\src\runner.rs')
+$windowsPipe = Get-Content -Raw (Join-Path $repositoryRoot 'crates\ipc\src\windows_pipe.rs')
+$desktopClient = Get-Content -Raw (Join-Path $repositoryRoot 'apps\desktop\src-tauri\src\client.rs')
 $agentMain = Get-Content -Raw (Join-Path $repositoryRoot 'crates\agent\src\main.rs')
 $processTracer = Get-Content -Raw (Join-Path $repositoryRoot 'scripts\m8\windows\Trace-M8ProcessStarts.ps1')
 $licensing = Get-Content -Raw (Join-Path $repositoryRoot 'docs\licensing.md')
@@ -89,7 +91,9 @@ Check 'provider resolves installed resources before source fallback' {
 Check 'release agent and background providers cannot flash consoles' {
     $agentMain -match 'windows_subsystem = "windows"' -and
         $windowsRunner -match 'CREATE_NO_WINDOW' -and $windowsRunner -match 'creation_flags' -and
-        $virtualBoxRunner -match 'CREATE_NO_WINDOW' -and $virtualBoxRunner -match 'creation_flags'
+        $virtualBoxRunner -match 'CREATE_NO_WINDOW' -and $virtualBoxRunner -match 'creation_flags' -and
+        $windowsPipe -match 'CREATE_NO_WINDOW' -and $windowsPipe -match 'creation_flags' -and
+        $desktopClient -match 'OnceLock<String>'
 }
 Check 'process tracer omits command lines and window titles' {
     $processTracer -notmatch '(?i)CommandLine|MainWindowTitle|window_title'
@@ -127,7 +131,7 @@ Check 'migrated appliance is explicitly preserved' {
 }
 Check 'upgrades retain installation identifier and config' {
     $lifecycle -match 'Previous\.installation_id' -and $lifecycle -match 'Read-Config' -and
-        $installGuide -match 'preserves configuration/desired'
+        $installGuide -match 'preserves the\s+configuration'
 }
 Check 'build requires explicit signing choice' {
     $builder -match 'UnsignedDevelopmentBuild' -and $builder -match 'CertificateThumbprint' -and

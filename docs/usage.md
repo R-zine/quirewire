@@ -6,22 +6,30 @@ the supported function.
 
 ## Normal printing
 
-1. Log in to the Windows account that installed PrintBridge.
+1. Log in to the Windows account that installed PrintBridge and open
+   **PrintBridge**. It does not start at Windows login.
 2. Turn on and connect the printer. Windows may stop exposing the native USB
    device while the Linux guest owns it; this is expected whole-device capture.
-3. Wait for the PrintBridge dashboard/tray to show **Ready**. The window does not
-   need to remain open.
+3. Wait for the PrintBridge dashboard/tray to show **Ready**. The window may be
+   closed to the tray, but the tray app must keep running.
 4. In Notepad, Chrome, or another ordinary application, select
    **Brother via PrintBridge** and print normally.
 5. If the application reports submission but no paper appears, check the
    dashboard and the printer itself. Software acceptance is not physical proof.
 
-Closing the window hides it to the notification area. **Exit UI (engine keeps
-running)** closes only the desktop client; the per-user agent and guest continue.
-To intentionally stop printing, use the dashboard Stop action or:
+For a phone or another computer, connect it to the same trusted, non-isolated
+local network and select the discovered **Brother via PrintBridge** printer.
+LAN sharing is limited to the explicitly approved Windows interface and IPv4
+subnet and exists only while the app is running. The reference approval permits
+`Ethernet 3` and `192.168.100.0/24` even though Windows labels that adapter
+Public; it permits nothing else on the Public profile.
+
+Closing the window hides it to the notification area and keeps printing active.
+**Exit PrintBridge (stop sharing)** unregisters LAN discovery, stops the owned
+VM and agent, and releases their memory. The CLI equivalent is:
 
 ```powershell
-& "$env:LOCALAPPDATA\PrintBridge\bin\printbridgectl.exe" stop
+& "$env:LOCALAPPDATA\PrintBridge\bin\printbridgectl.exe" shutdown
 ```
 
 Use `start`, `restart`, `status`, `test-print`, `diagnostics`, or `repair` with
@@ -33,12 +41,13 @@ you to inspect the sheet.
 - After unplugging USB, status should become **Waiting for USB**. Reconnect the
   same printer and allow bounded recovery; do not select a similar unknown USB
   device.
-- After sleep, reboot, or a guest failure, allow several minutes for the task,
-  VM, USB capture, CUPS, and Windows queue to reconcile.
+- After sleep or a guest failure, keep the app running and allow several minutes
+  for the VM, USB capture, CUPS, and queues to reconcile. After reboot, open the
+  app yourself.
 - If status remains unhealthy, choose **Repair**. Queue creation may show one
   UAC prompt; the persistent agent remains non-elevated.
-- The MVP runs only while this user is logged in. Pre-login and logged-off
-  printing are not supported.
+- Printing is intentionally unavailable while the app is exited, before login,
+  and after logoff.
 
 Installation, repair, upgrade, and uninstall details are in
 [install.md](install.md). Actionable failures are indexed in

@@ -167,6 +167,7 @@ function New-BaseViso {
         "/printbridge/base/firstboot.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\firstboot.sh'))",
         "/printbridge/base/apply-driver-media.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\apply-driver-media.sh'))",
         "/printbridge/base/health.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\health.sh'))",
+        "/printbridge/base/configure-lan-cups.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\configure-lan-cups.sh'))",
         "/printbridge/base/authorized_keys=$(Quote-VisoPath $PublicKeyPath)",
         "/printbridge/manifests/debian-13.7-amd64.env=$(Quote-VisoPath $debianManifestPath)",
         "/printbridge/config/90-printbridge-sshd.conf=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\90-printbridge-sshd.conf'))",

@@ -16,7 +16,8 @@ cargo tauri dev
 Run the UI without Tauri using `npm run dev:fake`. That explicit mode uses the
 in-memory fake client. A Tauri window always uses the owner-only named pipe.
 
-Closing the window hides it in the notification area. `Exit UI` terminates only
-the desktop process; the independently scheduled `printbridge-agent.exe` keeps
-the printing engine running.
+Closing the window hides it in the notification area and keeps the desktop
+heartbeat alive. `Exit PrintBridge` requests graceful agent/VM shutdown and
+stops LAN sharing. The agent is launched hidden on demand; no login task is
+created.
 

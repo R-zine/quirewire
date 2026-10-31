@@ -20,7 +20,7 @@ export interface PrintBridgeClient {
   getDiagnostics(): Promise<Diagnostics>;
   repair(): Promise<OperationResult>;
   exportDiagnostics(): Promise<string>;
-  exitUi(): Promise<void>;
+  exitPrintBridge(): Promise<void>;
 }
 
 export type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -69,5 +69,5 @@ export class TauriPrintBridgeClient implements PrintBridgeClient {
   getDiagnostics() { return this.call<Diagnostics>("agent_get_diagnostics"); }
   repair() { return this.call<OperationResult>("agent_repair"); }
   exportDiagnostics() { return this.call<string>("export_diagnostics"); }
-  exitUi() { return this.call<void>("exit_ui"); }
+  exitPrintBridge() { return this.call<void>("exit_printbridge"); }
 }

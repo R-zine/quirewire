@@ -89,6 +89,7 @@ fn parse_m6_command(args: &[String]) -> Option<Result<Command, String>> {
         [value] if value == "test-print" => Ok(Command::TestPrint),
         [value] if value == "diagnostics" => Ok(Command::GetDiagnostics),
         [value] if value == "repair" => Ok(Command::Repair),
+        [value] if value == "shutdown" => Ok(Command::Shutdown),
         [value, flag, index] if value == "setup" && flag == "--index" => index
             .parse::<usize>()
             .ok()
@@ -107,6 +108,7 @@ fn parse_m6_command(args: &[String]) -> Option<Result<Command, String>> {
                     | "test-print"
                     | "diagnostics"
                     | "repair"
+                    | "shutdown"
             ) =>
         {
             Err("Invalid M6 agent command arguments.".into())
@@ -165,7 +167,7 @@ fn run_m6(command: Command, output: &mut impl Write, error: &mut impl Write) -> 
             Err(failure) => {
                 let _ = writeln!(
                     error,
-                    "agent_unavailable: {failure}. Start the per-user PrintBridge agent."
+                    "agent_unavailable: {failure}. Open the PrintBridge desktop app."
                 );
                 return 1;
             }
@@ -475,7 +477,7 @@ const fn cli_help_text() -> &'static str {
 Usage: printbridgectl [--trace] [--config <path>] <command>\n\n\
 Headless agent commands (named-pipe IPC):\n\
   status | devices | setup --index N | start | stop | restart\n\
-  test-print | diagnostics | repair\n\n\
+  test-print | diagnostics | repair | shutdown\n\n\
 VirtualBox commands (M3 config):\n\
   doctor | vm status | vm start | vm stop\n\
   usb list | usb attach [--index N] | usb release [--index N]\n\n\
@@ -623,6 +625,7 @@ mod tests {
             (vec!["test-print"], Command::TestPrint),
             (vec!["diagnostics"], Command::GetDiagnostics),
             (vec!["repair"], Command::Repair),
+            (vec!["shutdown"], Command::Shutdown),
             (
                 vec!["setup", "--index", "2"],
                 Command::BeginSetup { device_index: 2 },

@@ -29,6 +29,10 @@ use crate::parser::{
 pub const OWNERSHIP_SCHEMA_KEY: &str = "PrintBridge/Schema";
 pub const OWNERSHIP_SCHEMA_VALUE: &str = "printbridge.m3.owned-vm.v1";
 pub const OWNERSHIP_MARKER_KEY: &str = "PrintBridge/Owner";
+pub const LAN_FORWARD_SCHEMA_KEY: &str = "PrintBridge/LanSchema";
+pub const LAN_FORWARD_SCHEMA_VALUE: &str = "printbridge.m10.lan-forward.v1";
+pub const LAN_FORWARD_RULE_KEY: &str = "PrintBridge/LanRule";
+pub const LAN_FORWARD_RULE_NAME: &str = "printbridge-m10-lan-ipp";
 
 #[derive(Debug, Clone)]
 pub struct VirtualBoxConfig {
@@ -267,6 +271,147 @@ impl<R: CommandRunner> VirtualBoxProvider<R> {
             ],
             self.config.command_timeout,
             "writing VM ownership metadata",
+        )?;
+        Ok(())
+    }
+
+    fn clear_extra_data(&self, vm_uuid: &str, key: &str) -> Result<(), BridgeError> {
+        self.execute(
+            [
+                OsStr::new("setextradata"),
+                OsStr::new(vm_uuid),
+                OsStr::new(key),
+            ],
+            self.config.command_timeout,
+            "clearing VM ownership metadata",
+        )?;
+        Ok(())
+    }
+
+    /// Ensures one exact marker-owned NAT rule bound to the selected Windows
+    /// explicitly approved interface address. An unrelated rule with the reserved name is a
+    /// hard collision and is never changed.
+    pub fn ensure_lan_ipp_forward(
+        &self,
+        vm: &OwnedVm,
+        host_address: std::net::Ipv4Addr,
+        host_port: u16,
+        guest_port: u16,
+    ) -> Result<(), BridgeError> {
+        validate_lan_forward(host_address, host_port, guest_port)?;
+        let mut machine = self.ensure_owned(vm)?;
+        let desired =
+            format!("{LAN_FORWARD_RULE_NAME},tcp,{host_address},{host_port},,{guest_port}");
+        let schema = self.extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
+        let marker = self.extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
+        let existing = nat_forward_rule(&machine, LAN_FORWARD_RULE_NAME)?;
+
+        match (existing.as_deref(), schema.as_deref(), marker.as_deref()) {
+            (Some(rule), Some(LAN_FORWARD_SCHEMA_VALUE), Some(marked)) if rule == marked => {
+                if rule == desired {
+                    return Ok(());
+                }
+                self.mutate_nat_forward(vm, true, rule)?;
+                machine = self.ensure_owned(vm)?;
+                if nat_forward_rule(&machine, LAN_FORWARD_RULE_NAME)?.is_some() {
+                    return Err(ownership_error(
+                        "the previously marker-owned LAN forward was not removed",
+                    ));
+                }
+            }
+            (None, None, None) => {}
+            (None, Some(LAN_FORWARD_SCHEMA_VALUE), Some(_)) => {
+                self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
+                self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
+            }
+            _ => {
+                return Err(ownership_error(
+                    "the reserved LAN forward name or metadata is not exactly owned",
+                ));
+            }
+        }
+
+        self.mutate_nat_forward(vm, false, &desired)?;
+        self.set_extra_data(
+            vm.id.as_str(),
+            LAN_FORWARD_SCHEMA_KEY,
+            LAN_FORWARD_SCHEMA_VALUE,
+        )?;
+        self.set_extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY, &desired)?;
+        let verified = self.ensure_owned(vm)?;
+        if nat_forward_rule(&verified, LAN_FORWARD_RULE_NAME)?.as_deref() != Some(desired.as_str())
+        {
+            return Err(BridgeError::Internal {
+                detail: "VirtualBox did not retain the exact LAN NAT forward".into(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Removes only the exact marker-owned M10 rule. Missing metadata plus a
+    /// reserved live rule is treated as a collision, never as ownership.
+    pub fn remove_lan_ipp_forward(&self, vm: &OwnedVm) -> Result<(), BridgeError> {
+        let machine = self.ensure_owned(vm)?;
+        let existing = nat_forward_rule(&machine, LAN_FORWARD_RULE_NAME)?;
+        let schema = self.extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
+        let marker = self.extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
+        match (existing.as_deref(), schema.as_deref(), marker.as_deref()) {
+            (None, None, None) => return Ok(()),
+            (None, Some(LAN_FORWARD_SCHEMA_VALUE), Some(_)) => {}
+            (Some(rule), Some(LAN_FORWARD_SCHEMA_VALUE), Some(marked)) if rule == marked => {
+                self.mutate_nat_forward(vm, true, rule)?;
+            }
+            _ => {
+                return Err(ownership_error(
+                    "refusing to remove a LAN forward without exact ownership metadata",
+                ));
+            }
+        }
+        self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
+        self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
+        Ok(())
+    }
+
+    fn mutate_nat_forward(
+        &self,
+        vm: &OwnedVm,
+        delete: bool,
+        rule: &str,
+    ) -> Result<(), BridgeError> {
+        let state = self.vm_power_state(vm)?;
+        let mut arguments = match state {
+            VmPowerState::Running => vec![
+                OsString::from("controlvm"),
+                OsString::from(vm.id.as_str()),
+                OsString::from("natpf1"),
+            ],
+            VmPowerState::PoweredOff => vec![
+                OsString::from("modifyvm"),
+                OsString::from(vm.id.as_str()),
+                OsString::from("--natpf1"),
+            ],
+            other => {
+                return Err(BridgeError::GuestUnhealthy {
+                    detail: format!("cannot change LAN forwarding while VM is {other:?}"),
+                    action: "Wait for the owned VM to finish its power transition and retry."
+                        .into(),
+                });
+            }
+        };
+        if delete {
+            arguments.push(OsString::from("delete"));
+            arguments.push(OsString::from(LAN_FORWARD_RULE_NAME));
+        } else {
+            arguments.push(OsString::from(rule));
+        }
+        self.execute(
+            arguments,
+            self.config.command_timeout,
+            if delete {
+                "removing owned LAN NAT forward"
+            } else {
+                "adding owned LAN NAT forward"
+            },
         )?;
         Ok(())
     }
@@ -909,6 +1054,47 @@ fn ownership_error(detail: &str) -> BridgeError {
     }
 }
 
+fn validate_lan_forward(
+    address: std::net::Ipv4Addr,
+    host_port: u16,
+    guest_port: u16,
+) -> Result<(), BridgeError> {
+    if host_port == 0
+        || guest_port == 0
+        || address.is_unspecified()
+        || address.is_loopback()
+        || address.is_link_local()
+        || address.is_multicast()
+    {
+        return Err(BridgeError::PermissionDenied {
+            operation: "configuring the LAN NAT forward".into(),
+            action: "Use the active IPv4 address of the explicitly approved Windows interface."
+                .into(),
+        });
+    }
+    Ok(())
+}
+
+fn nat_forward_rule(
+    machine: &std::collections::BTreeMap<String, String>,
+    name: &str,
+) -> Result<Option<String>, BridgeError> {
+    let matches: Vec<String> = machine
+        .iter()
+        .filter(|(key, value)| {
+            key.starts_with("Forwarding(") && value.split(',').next() == Some(name)
+        })
+        .map(|(_, value)| value.clone())
+        .collect();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [rule] => Ok(Some(rule.clone())),
+        _ => Err(ownership_error(
+            "multiple NAT forwards use the reserved LAN rule name",
+        )),
+    }
+}
+
 fn normalize_newlines(value: &str) -> String {
     value.replace("\r\n", "\n")
 }
@@ -1373,5 +1559,26 @@ mod tests {
                 .as_str(),
             "usb_busy"
         );
+    }
+
+    #[test]
+    fn lan_forward_parser_requires_one_exact_reserved_name() {
+        let mut machine = std::collections::BTreeMap::new();
+        machine.insert(
+            "Forwarding(0)".into(),
+            "printbridge-m4-ipp,tcp,127.0.0.1,8644,,631".into(),
+        );
+        machine.insert(
+            "Forwarding(1)".into(),
+            "printbridge-m10-lan-ipp,tcp,192.168.1.20,8644,,631".into(),
+        );
+        assert_eq!(
+            super::nat_forward_rule(&machine, super::LAN_FORWARD_RULE_NAME)
+                .expect("one rule")
+                .as_deref(),
+            Some("printbridge-m10-lan-ipp,tcp,192.168.1.20,8644,,631")
+        );
+        assert!(super::validate_lan_forward("192.168.1.20".parse().unwrap(), 8644, 631).is_ok());
+        assert!(super::validate_lan_forward("127.0.0.1".parse().unwrap(), 8644, 631).is_err());
     }
 }

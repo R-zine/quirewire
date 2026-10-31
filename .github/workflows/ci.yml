@@ -36,6 +36,9 @@ jobs:
       - name: M9 release-candidate safety
         shell: pwsh
         run: ./tests/m9/Invoke-M9SoftwareTests.ps1
+      - name: M10 on-demand LAN safety
+        shell: pwsh
+        run: ./tests/m10/Invoke-M10SoftwareTests.ps1
       - name: M3 PowerShell syntax
         shell: pwsh
         run: |

@@ -11,9 +11,13 @@ pub struct ProviderRecord {
 
 impl ProviderRecord {
     pub fn parse(value: &str) -> Result<Self, BridgeError> {
+        Self::parse_with_header(value, HEADER)
+    }
+
+    pub fn parse_with_header(value: &str, header: &str) -> Result<Self, BridgeError> {
         let normalized = value.replace("\r\n", "\n");
         let mut lines = normalized.lines();
-        if lines.next() != Some(HEADER) {
+        if lines.next() != Some(header) {
             return Err(protocol_error("missing protocol header"));
         }
         let mut fields = BTreeMap::new();

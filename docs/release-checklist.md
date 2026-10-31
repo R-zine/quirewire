@@ -2,7 +2,7 @@
 
 ## Source and quality
 
-- [ ] M0–M9 milestone reports exist and every hard gate has honest evidence.
+- [ ] M0–M10 milestone reports exist and every hard gate has honest evidence.
 - [ ] Worktree is clean and the release commit is reviewed.
 - [ ] `cargo fmt`, Clippy with warnings denied, all Rust tests, frontend tests/
   build, milestone software suites, and disposable VirtualBox integration pass.
@@ -17,9 +17,11 @@
   clean-uninstall baseline comparison passes.
 - [ ] USB serial, keys, vendor packages, configured OVA, logs, and machine
   evidence are absent from Git and release assets.
-- [ ] Diagnostics are reviewed for redaction; named-pipe ACL and limited task are
-  verified on the candidate.
-- [ ] CUPS/SSH remain loopback-only and no inbound firewall/LAN exposure exists.
+- [ ] Diagnostics are reviewed for redaction; named-pipe ACL, desktop heartbeat,
+  and absence of the legacy login task are verified on the candidate.
+- [ ] CUPS administration/SSH remain loopback-only. LAN rules are exact-program,
+  TCP IPP/UDP mDNS, exact approved interface/subnet, and no broader than
+  `Profile=Private,Public`.
 - [ ] Windows default/unrelated printers and unrelated VMs survive testing.
 
 ## Packaging, licensing, and signing
@@ -34,6 +36,11 @@
   `docs/usage.md` without repository-only assumptions.
 
 ## Final physical candidate
+
+- [ ] M10 phone/LAN discovery prints one small physical page from the explicitly
+  approved same subnet; explicit Exit then stops agent/VM and discovery.
+- [ ] Firewall inspection proves the Public-category exception is limited to the
+  approved interface, remote subnet, programs, protocols and ports.
 
 - [ ] Prior normal-app text/PDF milestone evidence remains applicable; the M9
   20-job mixed soak and long PDF are complete and legible.

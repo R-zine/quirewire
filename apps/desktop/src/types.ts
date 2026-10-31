@@ -25,11 +25,20 @@ export interface AgentStatus {
     usb: ComponentStatus;
     cups: ComponentStatus;
     windows_queue: ComponentStatus;
+    lan: ComponentStatus;
   };
   startup: {
     registered: boolean;
     task_name: string;
     logoff_behavior: string;
+  };
+  lan: {
+    enabled: boolean;
+    interface_alias: string | null;
+    network_category: string | null;
+    address: string | null;
+    endpoint: string | null;
+    service_instance: string | null;
   };
 }
 

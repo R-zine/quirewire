@@ -56,6 +56,8 @@ pub enum Command {
     TestPrint,
     GetDiagnostics,
     Repair,
+    Heartbeat,
+    Shutdown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,6 +125,7 @@ pub struct AgentStatus {
     pub retry_after_ms: Option<u64>,
     pub components: AgentComponents,
     pub startup: StartupStatus,
+    pub lan: LanStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,6 +136,7 @@ pub struct AgentComponents {
     pub usb: WireComponent,
     pub cups: WireComponent,
     pub windows_queue: WireComponent,
+    pub lan: WireComponent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -162,6 +166,17 @@ pub struct StartupStatus {
     pub registered: bool,
     pub task_name: String,
     pub logoff_behavior: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LanStatus {
+    pub enabled: bool,
+    pub interface_alias: Option<String>,
+    pub network_category: Option<String>,
+    pub address: Option<String>,
+    pub endpoint: Option<String>,
+    pub service_instance: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -346,8 +361,8 @@ mod tests {
     #[tokio::test]
     async fn arbitrary_commands_and_unknown_fields_are_rejected() {
         for json in [
-            "{\"version\":4,\"request_id\":\"r1\",\"command\":{\"name\":\"exec\",\"command\":\"whoami\"}}\n",
-            "{\"version\":4,\"request_id\":\"r1\",\"extra\":true,\"command\":{\"name\":\"start\"}}\n",
+            "{\"version\":6,\"request_id\":\"r1\",\"command\":{\"name\":\"exec\",\"command\":\"whoami\"}}\n",
+            "{\"version\":6,\"request_id\":\"r1\",\"extra\":true,\"command\":{\"name\":\"start\"}}\n",
         ] {
             let (mut writer, reader) = duplex(1024);
             writer.write_all(json.as_bytes()).await.expect("write");

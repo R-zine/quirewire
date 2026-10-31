@@ -8,6 +8,7 @@
 
 use std::ffi::c_void;
 use std::io;
+use std::os::windows::process::CommandExt;
 use std::process::Command as ProcessCommand;
 use std::ptr;
 use std::time::Duration;
@@ -22,6 +23,7 @@ use windows_sys::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use crate::{RequestEnvelope, ResponseEnvelope, WireError, read_response, write_request};
 
 const SDDL_REVISION_1: u32 = 1;
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub const PIPE_PREFIX: &str = r"\\.\pipe\PrintBridge-Agent-v4-";
 
 #[derive(Debug, Clone)]
@@ -115,9 +117,9 @@ impl Drop for SecurityDescriptor {
 }
 
 pub fn current_user_sid() -> io::Result<String> {
-    let output = ProcessCommand::new("whoami.exe")
-        .args(["/user", "/fo", "csv", "/nh"])
-        .output()?;
+    let mut command = ProcessCommand::new("whoami.exe");
+    command.creation_flags(CREATE_NO_WINDOW);
+    let output = command.args(["/user", "/fo", "csv", "/nh"]).output()?;
     if !output.status.success() {
         return Err(io::Error::other("whoami /user failed"));
     }

@@ -1,7 +1,7 @@
 # Install, repair, upgrade, and uninstall
 
-PrintBridge M8 supports Windows 11 x64 for one interactive user. The UI and
-persistent agent run at ordinary user privilege. The NSIS installer is
+PrintBridge supports Windows 11 x64 for one interactive user. The UI and
+on-demand agent run at ordinary user privilege. The NSIS installer is
 `currentUser`; no always-elevated process or service is installed.
 
 ## Before setup
@@ -16,7 +16,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 Allow at least 12 GiB free disk space. The headless guest reserves 768 MiB RAM
 while running. PrintBridge captures the **whole selected USB device**, so Windows
 cannot use that device while the guest owns it. Setup asks for explicit consent
-in the desktop before enabling login startup.
+in the desktop. No login startup is enabled.
 
 VirtualBox, WebView2, and a configured appliance are prerequisites, not silently
 installed dependencies. See [licensing.md](licensing.md) for the exact offline
@@ -33,8 +33,8 @@ state, live VM UUID plus extradata, exact USB serial, and loopback endpoint.
 
 Once `%LOCALAPPDATA%\PrintBridge\m6.conf` exists, run lifecycle repair from the
 installation directory and open PrintBridge. Windows shows one UAC consent
-prompt if the exact owned IPP queue must be created; the background agent and
-startup task remain non-elevated:
+prompt if the exact owned IPP queue or approved-interface/subnet firewall rules must
+be created; the on-demand desktop and agent remain non-elevated:
 
 ```powershell
 $root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
@@ -46,20 +46,36 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 
 In Setup, discover USB devices, select only the recorded printer, read the whole
 device ownership notice, check consent, and choose **Confirm & enable bridge**.
-The agent then reconciles the guest, USB, CUPS, Microsoft IPP queue, and startup
-task without importing setup code into the UI.
+The agent then reconciles the guest, USB, CUPS, Microsoft IPP queue, and scoped
+LAN sharing without importing setup code into the UI. LAN access is off until
+the owner explicitly approves one current interface alias and its directly
+attached local IPv4 subnet. For the reference host:
+
+```powershell
+$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  "$root\scripts\m10\windows\Set-M10LanApproval.ps1" `
+  -Action Approve -ConfigPath "$root\m6.conf" `
+  -InterfaceAlias 'Ethernet 3' -Subnet '192.168.100.0/24'
+```
+
+Run Repair after changing approval. The exact firewall exception covers the
+approved interface/subnet even when Windows categorizes it Public; it does not
+authorize another adapter, subnet, port, or program. Use `-Action Remove` to
+withdraw LAN approval, then run Repair or explicitly Exit.
 
 ## Existing M6/M7 installation or upgrade
 
-The installer detects the protected M6 configuration, validates the exact old
-PrintBridge task, stops only that executable, preserves configuration/desired
-state, installs new binaries, rewrites the same per-user task to the installed
-agent, and starts it. Re-running the same installer is an idempotent repair.
+The installer detects the protected M6 configuration, validates and removes the
+exact old PrintBridge login task, stops only that executable, preserves the
+configuration, installs new binaries, and leaves the agent/VM stopped until the
+desktop is opened. Re-running the same installer is an idempotent repair.
 
 Manual repair is the same fixed lifecycle command shown above. It refuses a task,
 manifest, queue, config, or VM identity mismatch rather than guessing ownership.
-It requests one-time elevation only when the owned queue is absent; a healthy
-marker-owned queue is verified without prompting.
+It requests one-time elevation only for the owned queue and exact scoped
+firewall rules; healthy marker-owned resources are verified without broad
+mutation.
 
 ## Unsigned development build
 
@@ -83,10 +99,12 @@ files, the lifecycle hook:
 3. stops only the manifest-recorded agent executable;
 4. removes only the Windows queue matching the marker file, live comment, port,
    endpoint, and Microsoft IPP driver;
-5. deletes a VM only if its manifest disposition is `installation-owned` and
+5. removes only the M10 firewall rules whose names and descriptions match the
+   VM-bound ownership token;
+6. deletes a VM only if its manifest disposition is `installation-owned` and
    both live VirtualBox ownership extradata values match; migrated M4 appliances
    are explicitly preserved;
-6. removes tracked config, logs, state, and manifest, leaving diagnostic exports
+7. removes tracked config, logs, state, and manifest, leaving diagnostic exports
    and unrelated user files untouched.
 
 If the owned queue is the Windows default, choose another default first. Any

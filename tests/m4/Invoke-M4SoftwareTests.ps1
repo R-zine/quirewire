@@ -54,6 +54,7 @@ $shellFiles = @(
     'guest/linux/firstboot.sh',
     'guest/linux/apply-driver-media.sh',
     'guest/linux/health.sh'
+    'guest/linux/configure-lan-cups.sh'
 )
 Check 'Bash syntax for every guest script' {
     & $bashPath -n @($shellFiles | ForEach-Object { Join-Path $repositoryRoot $_ })
@@ -97,6 +98,13 @@ Check 'Base provisioning is minimal, key-only, and has no GUI task' {
 Check 'CUPS sharing forbids remote admin and remote-any' {
     Require ($baseScript.Contains('--share-printers --no-remote-admin --no-remote-any')) 'protected cupsctl flags absent'
     Require (-not $baseScript.Contains('--remote-any')) 'unsafe CUPS remote-any flag present'
+}
+Check 'CUPS LAN access is limited to the owned print queue' {
+    $policy = Get-Content -Raw (Join-Path $repositoryRoot 'guest\linux\configure-lan-cups.sh')
+    Require ($policy.Contains('<Location /printers/PrintBridge_DCP_L2600D>')) 'owned queue location absent'
+    Require ($policy.Contains('ServerAlias printbridge-m4.local')) 'fixed advertised alias absent'
+    Require (-not $policy.Contains('<Location />')) 'root CUPS location was exposed'
+    Require (-not $policy.Contains('<Location /admin>')) 'CUPS administration was exposed'
 }
 Check 'Driver workflows separate open and official paths before queue mutation' {
     $open = $driverScript.IndexOf('open-brlaser)')

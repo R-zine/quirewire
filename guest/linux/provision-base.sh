@@ -91,6 +91,7 @@ install_if_different "$script_dir/provision-base.sh" /usr/local/lib/printbridge/
 install_if_different "$script_dir/firstboot.sh" /usr/local/lib/printbridge/firstboot.sh 0755
 install_if_different "$script_dir/apply-driver-media.sh" /usr/local/lib/printbridge/apply-driver-media.sh 0755
 install_if_different "$script_dir/health.sh" /usr/local/lib/printbridge/health.sh 0755
+install_if_different "$script_dir/configure-lan-cups.sh" /usr/local/lib/printbridge/configure-lan-cups.sh 0755
 install_if_different "$script_dir/apply-driver-media.sh" /usr/local/sbin/printbridge-apply-driver-media 0755
 install_if_different "$script_dir/health.sh" /usr/local/sbin/printbridge-health 0755
 install_if_different "$manifest" /usr/local/lib/printbridge/debian.env 0644
@@ -175,6 +176,7 @@ fi
 
 if [[ "$mode" == --repair ]] && systemctl is-active --quiet cups.service; then
   /usr/sbin/cupsctl --share-printers --no-remote-admin --no-remote-any
+  /usr/local/lib/printbridge/configure-lan-cups.sh
   /usr/sbin/cupsd -t
   systemctl restart cups.service
 fi

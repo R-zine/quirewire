@@ -1,5 +1,9 @@
 # M8 Windows packaging and acceptance
 
+> M10 changes the installed lifecycle to on-demand operation. Repair removes the
+> exact legacy login task and installs only explicitly approved
+> interface/subnet firewall rules; opening the desktop starts the agent/VM.
+
 - `Build-M8Installer.ps1` builds the release agent/CLI and Tauri NSIS package.
   It requires an explicit unsigned-development or signed-release choice.
 - `Test-M8Prerequisites.ps1` reports Windows, WebView2, PrintManagement,

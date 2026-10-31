@@ -15,6 +15,9 @@
       "../../../scripts/m8/windows/Invoke-M8Lifecycle.ps1": "scripts/m8/windows/Invoke-M8Lifecycle.ps1",
       "../../../scripts/m8/windows/Test-M8Prerequisites.ps1": "scripts/m8/windows/Test-M8Prerequisites.ps1",
       "../../../scripts/m8/windows/Trace-M8ProcessStarts.ps1": "scripts/m8/windows/Trace-M8ProcessStarts.ps1",
+      "../../../scripts/m10/windows/Invoke-M10LanSharing.ps1": "scripts/m10/windows/Invoke-M10LanSharing.ps1",
+      "../../../scripts/m10/windows/Set-M10LanApproval.ps1": "scripts/m10/windows/Set-M10LanApproval.ps1",
+      "../../../scripts/m10/windows/Test-M10LanIpp.ps1": "scripts/m10/windows/Test-M10LanIpp.ps1",
       "../../../guest/": "guest/",
       "../../../docs/install.md": "docs/install.md",
       "../../../docs/licensing.md": "docs/licensing.md"

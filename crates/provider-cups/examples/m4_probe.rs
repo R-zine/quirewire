@@ -37,6 +37,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     for entry in provider.diagnostics()? {
         println!("{}={}", entry.name, entry.value);
     }
+    let advertisement = provider.advertisement()?;
+    println!("make_model={}", advertisement.make_model);
+    println!("formats={}", advertisement.formats.join(","));
+    println!("urf={}", advertisement.urf.join(","));
+    println!("color={}", advertisement.color);
+    println!("duplex={}", advertisement.duplex);
     let status = provider.queue_status(&queue)?;
     if status.state != ComponentState::Ready {
         return Err(format!("CUPS queue is not ready: {status:?}").into());

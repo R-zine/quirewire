@@ -10,6 +10,7 @@ printbridge-core.workspace = true
 printbridge-domain.workspace = true
 printbridge-ipc.workspace = true
 printbridge-provider-cups = { path = "../provider-cups" }
+printbridge-provider-lan.workspace = true
 printbridge-provider-virtualbox = { path = "../provider-virtualbox" }
 printbridge-provider-windows = { path = "../provider-windows" }
 serde.workspace = true

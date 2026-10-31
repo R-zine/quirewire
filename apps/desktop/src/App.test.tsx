@@ -13,10 +13,10 @@ describe("PrintBridge desktop flows", () => {
   it("renders real component-level status from the client", async () => {
     renderApp();
     expect(await screen.findByRole("heading", { name: "Ready to print" })).toBeTruthy();
-    for (const name of ["VirtualBox", "Linux guest", "USB printer", "CUPS", "Windows queue"]) {
+    for (const name of ["VirtualBox", "Linux guest", "USB printer", "CUPS", "Windows queue", "Local network"]) {
       expect(screen.getByRole("heading", { name })).toBeTruthy();
     }
-    expect(screen.getByText("Brother via PrintBridge is available in standard Windows print dialogs.")).toBeTruthy();
+    expect(screen.getByText("Brother via PrintBridge is available to Windows and trusted local-network devices.")).toBeTruthy();
   });
 
   it("requires explicit whole-device consent before setup", async () => {
@@ -57,7 +57,7 @@ describe("PrintBridge desktop flows", () => {
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Diagnostics/ }));
-    await screen.findByText(/Protocol v4/);
+    await screen.findByText(/Protocol v6/);
     await user.click(screen.getByRole("button", { name: "Run safe repair" }));
     await waitFor(() => expect(client.calls).toContain("repair"));
     await user.click(screen.getByRole("button", { name: "Export report" }));
@@ -76,16 +76,39 @@ describe("PrintBridge desktop flows", () => {
     expect(screen.getByText(/No credentials or driver files are stored/)).toBeTruthy();
   });
 
-  it("distinguishes exiting the UI from stopping the engine", async () => {
+  it("makes explicit exit stop the on-demand bridge", async () => {
     const user = userEvent.setup();
     const client = new FakePrintBridgeClient();
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Settings/ }));
     expect(screen.getByRole("button", { name: "Stop printing engine" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Exit UI only" }));
-    expect(client.calls).toContain("exitUi");
+    await user.click(screen.getByRole("button", { name: "Exit PrintBridge" }));
+    expect(client.calls).toContain("exitPrintBridge");
     expect(client.calls).not.toContain("stop");
+    expect(screen.getByRole("heading", { name: "Closing PrintBridge…" })).toBeTruthy();
+    expect(screen.getByText(/This window will close automatically/)).toBeTruthy();
+  });
+
+  it("returns from the closing state when shutdown fails", async () => {
+    const user = userEvent.setup();
+    const client = new FakePrintBridgeClient();
+    client.exitPrintBridge = vi.fn(async () => {
+      throw new ClientError({
+        code: "shutdown_failed",
+        message: "PrintBridge could not finish shutting down",
+        action: "Try Exit again.",
+        retryable: true,
+      });
+    });
+    renderApp(client);
+    await screen.findByRole("heading", { name: "Ready to print" });
+    await user.click(screen.getByRole("button", { name: /^Settings/ }));
+    await user.click(screen.getByRole("button", { name: "Exit PrintBridge" }));
+
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Try Exit again.")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Closing PrintBridge…" })).toBeNull();
   });
 
   it("shows an actionable error state when the agent is unavailable", async () => {

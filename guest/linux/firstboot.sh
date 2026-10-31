@@ -11,6 +11,7 @@ exec > >(tee -a /var/log/printbridge/firstboot.log) 2>&1
 systemctl is-active --quiet cups.service
 systemctl is-active --quiet ssh.service
 /usr/sbin/cupsctl --share-printers --no-remote-admin --no-remote-any
+/usr/local/lib/printbridge/configure-lan-cups.sh
 /usr/sbin/cupsd -t
 systemctl restart cups.service
 sleep 2

@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)]
     [ValidateSet('Install', 'Repair', 'PrepareUpgrade', 'Status', 'Uninstall',
-        'InstallQueueElevated', 'RemoveQueueElevated')]
+        'InstallQueueElevated', 'RemoveQueueElevated', 'InstallLanElevated', 'RemoveLanElevated')]
     [string]$Action,
 
     [Parameter(Mandatory)]
@@ -26,6 +26,10 @@ $agentPath = Join-Path $InstallRoot 'bin\printbridge-agent.exe'
 $cliPath = Join-Path $InstallRoot 'bin\printbridgectl.exe'
 $startupScript = Join-Path $InstallRoot 'scripts\m6\windows\Invoke-M6Startup.ps1'
 $printerScript = Join-Path $InstallRoot 'scripts\m5\windows\Invoke-M5WindowsPrinting.ps1'
+$lanScript = Join-Path $InstallRoot 'scripts\m10\windows\Invoke-M10LanSharing.ps1'
+$lanApprovalScript = Join-Path $InstallRoot 'scripts\m10\windows\Set-M10LanApproval.ps1'
+$lanIppProbe = Join-Path $InstallRoot 'scripts\m10\windows\Test-M10LanIpp.ps1'
+$vboxHeadless = Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxHeadless.exe'
 $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 
 function Get-FullPath([string]$Path) {
@@ -44,6 +48,9 @@ $agentPath = Join-Path $InstallRoot 'bin\printbridge-agent.exe'
 $cliPath = Join-Path $InstallRoot 'bin\printbridgectl.exe'
 $startupScript = Join-Path $InstallRoot 'scripts\m6\windows\Invoke-M6Startup.ps1'
 $printerScript = Join-Path $InstallRoot 'scripts\m5\windows\Invoke-M5WindowsPrinting.ps1'
+$lanScript = Join-Path $InstallRoot 'scripts\m10\windows\Invoke-M10LanSharing.ps1'
+$lanApprovalScript = Join-Path $InstallRoot 'scripts\m10\windows\Set-M10LanApproval.ps1'
+$lanIppProbe = Join-Path $InstallRoot 'scripts\m10\windows\Test-M10LanIpp.ps1'
 
 function Assert-ChildPath([string]$Candidate, [string]$Parent) {
     $candidatePath = Get-FullPath $Candidate
@@ -65,9 +72,13 @@ function Read-Config {
         }
         $values[$parts[0]] = $parts[1]
     }
-    $expected = @('schema', 'owner_sid', 'vm_uuid', 'vm_marker', 'vm_schema', 'usb_vendor_id',
+    $required = @('schema', 'owner_sid', 'vm_uuid', 'vm_marker', 'vm_schema', 'usb_vendor_id',
         'usb_product_id', 'usb_serial', 'printer_name', 'endpoint_port', 'guest_queue')
-    if (@($values.Keys).Count -ne $expected.Count -or @($expected | Where-Object { -not $values.Contains($_) }).Count -ne 0) {
+    $optional = @('lan_interface_alias', 'lan_subnet')
+    $unknown = @($values.Keys | Where-Object { $_ -notin ($required + $optional) })
+    if (@($required | Where-Object { -not $values.Contains($_) }).Count -ne 0 -or
+        $unknown.Count -ne 0 -or
+        $values.Contains('lan_interface_alias') -ne $values.Contains('lan_subnet')) {
         throw 'The PrintBridge configuration does not match the exact supported schema.'
     }
     if ($values.schema -ne 'printbridge.m6.config.v1' -or $values.owner_sid -ne $ownerSid) {
@@ -79,7 +90,19 @@ function Read-Config {
         $values.guest_queue -notmatch '^[A-Za-z0-9._-]+$') {
         throw 'The PrintBridge configuration contains an unsupported managed identity.'
     }
+    if ($values.Contains('lan_interface_alias')) {
+        if ([string]::IsNullOrWhiteSpace($values.lan_interface_alias) -or
+            $values.lan_interface_alias.IndexOfAny([char[]]"`r`n") -ge 0 -or
+            $values.lan_subnet -notmatch '^[0-9]{1,3}(?:\.[0-9]{1,3}){3}/(?:[89]|[12][0-9]|30)$') {
+            throw 'The PrintBridge LAN approval is malformed.'
+        }
+    }
     [pscustomobject]$values
+}
+
+function Test-LanApproved([object]$Config) {
+    $names = @($Config.PSObject.Properties.Name)
+    ('lan_interface_alias' -in $names) -and ('lan_subnet' -in $names)
 }
 
 function Read-Manifest([switch]$Required) {
@@ -178,6 +201,56 @@ function Assert-ProviderSuccess([object]$Result, [string]$Operation) {
     if ($Result.exit_code -ne 0 -or $Result.output -notcontains 'ok=true') {
         $detail = @($Result.output | Where-Object { $_ -match '^(error_code|error_message)=' }) -join '; '
         throw "The exact marker-owned Windows queue $Operation failed. $detail"
+    }
+}
+
+function Invoke-LanProvider([string]$ProviderAction, [object]$Config) {
+    if (-not (Test-Path -LiteralPath $lanScript -PathType Leaf)) {
+        throw 'The packaged M10 LAN provider is missing.'
+    }
+    $providerArguments = @(
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', $lanScript, '-Action', $ProviderAction, '-OwnerToken', $Config.vm_uuid,
+        '-IppPort', $Config.endpoint_port, '-AgentExecutable', $agentPath,
+        '-VBoxHeadlessExecutable', $vboxHeadless
+    )
+    if (Test-LanApproved $Config) {
+        $providerArguments += @(
+            '-ApprovedInterfaceAlias', $Config.lan_interface_alias,
+            '-ApprovedSubnet', $Config.lan_subnet
+        )
+    }
+    $output = @(& powershell.exe @providerArguments 2>&1 | ForEach-Object { $_.ToString() })
+    [pscustomobject]@{ exit_code = $LASTEXITCODE; output = @($output) }
+}
+
+function Invoke-ElevatedLanOperation([ValidateSet('InstallLanElevated', 'RemoveLanElevated')][string]$ElevatedAction) {
+    New-Item -ItemType Directory -Force -Path $DataRoot | Out-Null
+    $resultPath = Join-Path $DataRoot ('.lan-operation-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $powershellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $arguments = @(
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', ('"{0}"' -f $scriptPath), '-Action', $ElevatedAction,
+        '-InstallRoot', ('"{0}"' -f $InstallRoot), '-DataRoot', ('"{0}"' -f $DataRoot),
+        '-QueueResultPath', ('"{0}"' -f $resultPath), '-VBoxManage', ('"{0}"' -f $VBoxManage)
+    )
+    try {
+        $process = Start-Process -FilePath $powershellPath -ArgumentList $arguments -Verb RunAs `
+            -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
+            throw 'The one-time scoped LAN firewall operation was declined or failed.'
+        }
+        $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+        if ($process.ExitCode -ne 0 -or $result.exit_code -ne 0 -or
+            $result.output -notcontains 'ok=true' -or
+            ($ElevatedAction -eq 'InstallLanElevated' -and $result.output -notcontains 'firewall_ready=true')) {
+            throw 'The exact approved-interface/subnet firewall operation failed.'
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $resultPath -PathType Leaf) {
+            Remove-Item -LiteralPath $resultPath -Force
+        }
     }
 }
 
@@ -323,6 +396,26 @@ function Remove-OwnedData([object]$Manifest) {
 }
 
 switch ($Action) {
+    'InstallLanElevated' {
+        if (-not (Test-IsAdministrator)) { throw 'The scoped LAN helper requires elevation.' }
+        $verifiedResultPath = Assert-ChildPath $QueueResultPath $DataRoot
+        $config = Read-Config
+        if (-not $config) { throw 'The scoped LAN helper needs the protected configuration.' }
+        $result = Invoke-LanProvider -ProviderAction InstallFirewall -Config $config
+        $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $verifiedResultPath -Encoding utf8
+        if ($result.exit_code -ne 0 -or $result.output -notcontains 'ok=true') { exit 1 }
+        exit 0
+    }
+    'RemoveLanElevated' {
+        if (-not (Test-IsAdministrator)) { throw 'The scoped LAN helper requires elevation.' }
+        $verifiedResultPath = Assert-ChildPath $QueueResultPath $DataRoot
+        $config = Read-Config
+        if (-not $config) { throw 'The scoped LAN helper needs the protected configuration.' }
+        $result = Invoke-LanProvider -ProviderAction RemoveFirewall -Config $config
+        $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $verifiedResultPath -Encoding utf8
+        if ($result.exit_code -ne 0 -or $result.output -notcontains 'ok=true') { exit 1 }
+        exit 0
+    }
     'InstallQueueElevated' {
         if (-not (Test-IsAdministrator)) { throw 'The scoped printer helper requires an elevated Windows token.' }
         $verifiedResultPath = Assert-ChildPath $QueueResultPath $DataRoot
@@ -350,7 +443,8 @@ switch ($Action) {
         [pscustomobject]@{ schema = $schema; action = $Action; ready = $true } | ConvertTo-Json
     }
     'Install' {
-        foreach ($required in @($agentPath, $cliPath, $startupScript, $printerScript)) {
+        foreach ($required in @($agentPath, $cliPath, $startupScript, $printerScript,
+                $lanScript, $lanApprovalScript, $lanIppProbe)) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
                 throw "The installer did not place required resource: $required"
             }
@@ -360,13 +454,12 @@ switch ($Action) {
         if ($config) {
             $null = Disable-ExistingOwnedTask
             Invoke-OwnedQueue -QueueAction Install -Config $config
-            Invoke-Startup Enable
+            if (Test-LanApproved $config) {
+                Invoke-ElevatedLanOperation -ElevatedAction InstallLanElevated
+            }
         }
         $manifest = New-InstallationManifest -Config $config -Previous $previous
         Write-Manifest $manifest
-        if ($config) {
-            Start-ScheduledTask -TaskPath $taskPath -TaskName $taskName
-        }
         [pscustomobject]@{
             schema = $schema
             action = $Action
@@ -382,9 +475,10 @@ switch ($Action) {
         if (-not $config) { throw 'Repair needs an owner-created appliance configuration; see the packaged install guide.' }
         $null = Disable-ExistingOwnedTask
         Invoke-OwnedQueue -QueueAction Install -Config $config
-        Invoke-Startup Enable
+        if (Test-LanApproved $config) {
+            Invoke-ElevatedLanOperation -ElevatedAction InstallLanElevated
+        }
         Write-Manifest (New-InstallationManifest -Config $config -Previous $manifest)
-        Start-ScheduledTask -TaskPath $taskPath -TaskName $taskName
         [pscustomobject]@{ schema = $schema; action = $Action; repaired = $true } | ConvertTo-Json
     }
     'Status' {
@@ -407,7 +501,10 @@ switch ($Action) {
         $config = Read-Config
         $null = Disable-ExistingOwnedTask
         Stop-ExactAgent $manifest.agent_path
-        if ($config) { Invoke-OwnedQueue -QueueAction Remove -Config $config }
+        if ($config) {
+            Invoke-OwnedQueue -QueueAction Remove -Config $config
+            Invoke-ElevatedLanOperation -ElevatedAction RemoveLanElevated
+        }
         if ($manifest.vm) { Remove-InstallationOwnedVm $manifest.vm }
         Remove-OwnedData $manifest
         [pscustomobject]@{

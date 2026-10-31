@@ -2,8 +2,9 @@
 
 - Supported scope is one Windows 11 x64 computer, one interactive user, one
   tested Brother DCP-L2600D (`04f9:0567`), and printing only.
-- The user must remain logged in. The per-user task stops at logoff; pre-login
-  printing is not promised.
+- The user must open PrintBridge when printing is needed. There is deliberately
+  no login task; explicit Exit, logoff, or loss of the desktop heartbeat stops
+  the agent, VM, and sharing.
 - VirtualBox 7.1+ major-7, WebView2, and an owner-local configured appliance are
   prerequisites. The installer does not silently download them.
 - The Brother Linux driver/configured appliance cannot currently be
@@ -13,8 +14,18 @@
 - Status distinguishes Windows acceptance and observable CUPS state from paper.
   Physical output, jams, toner, and no-paper may not be reported reliably by
   this legacy driver/device.
-- The supported endpoint is a fixed loopback NAT forward. LAN sharing and remote
-  administration are non-goals. A port collision blocks startup until repaired.
+- Windows uses a fixed loopback NAT forward. LAN clients use a second temporary
+  forward and DNS-SD advertisement only on one explicitly approved active
+  default-route interface and directly attached IPv4 subnet. The exact firewall
+  rules include Private and Public profiles only because Windows labels the
+  reference `Ethernet 3` adapter Public; interface, remote CIDR, program,
+  protocol, and port remain fixed. Routed, VPN, internet, other-adapter and
+  remote-administration use is unsupported. A port collision blocks startup
+  until repaired.
+- M4 appliances created before M10 need the documented queue-only CUPS policy
+  migration or a rebuild from the current guest sources. The reference VM was
+  migrated through a validated offline clone; its original VDI is preserved for
+  rollback.
 - One Windows PDF viewer (Chrome on the reference host) has no unattended
   `printto` verb. M9 automation therefore uses a signature-verified portable
   SumatraPDF as an owner-local test tool; it is not a product dependency or

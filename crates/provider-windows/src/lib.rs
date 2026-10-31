@@ -9,6 +9,7 @@ mod runner;
 
 use std::env;
 use std::ffi::OsString;
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -27,6 +28,8 @@ pub const PRINTING_IMPLEMENTATION_MILESTONE: &str = "M5";
 pub const STARTUP_IMPLEMENTATION_MILESTONE: &str = "M6";
 pub const STARTUP_TASK_PATH: &str = r"\PrintBridge\";
 pub const STARTUP_TASK_NAME: &str = "Agent";
+pub const LAN_IMPLEMENTATION_MILESTONE: &str = "M10";
+const LAN_PROTOCOL: &str = "PRINTBRIDGE_LAN_V2";
 
 static CORRELATION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -68,6 +71,149 @@ pub struct WindowsStartupConfig {
     pub agent_config: PathBuf,
     pub owner_sid: String,
     pub command_timeout: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct WindowsLanConfig {
+    pub powershell: PathBuf,
+    pub script: PathBuf,
+    pub owner_token: String,
+    pub ipp_port: u16,
+    pub agent_executable: PathBuf,
+    pub vbox_headless_executable: PathBuf,
+    pub approved_interface_alias: Option<String>,
+    pub approved_subnet: Option<String>,
+    pub command_timeout: Duration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LanStatus {
+    pub network_allowed: bool,
+    pub interface_alias: Option<String>,
+    pub network_category: Option<String>,
+    pub address: Option<Ipv4Addr>,
+    pub firewall_ready: bool,
+    pub reason: String,
+}
+
+pub struct WindowsLanProvider<R = ProcessRunner> {
+    runner: R,
+    config: WindowsLanConfig,
+}
+
+impl WindowsLanProvider<ProcessRunner> {
+    pub fn discover(
+        owner_token: impl Into<String>,
+        ipp_port: u16,
+        agent_executable: impl Into<PathBuf>,
+        approved_interface_alias: Option<String>,
+        approved_subnet: Option<String>,
+    ) -> Result<Self, BridgeError> {
+        let script = discover_resource(&["scripts", "m10", "windows", "Invoke-M10LanSharing.ps1"])
+            .ok_or_else(|| BridgeError::MissingDependency {
+                dependency: "PrintBridge M10 LAN provider resource".into(),
+                action: "Repair the PrintBridge installation or restore Invoke-M10LanSharing.ps1."
+                    .into(),
+            })?;
+        let program_files =
+            env::var_os("ProgramFiles").ok_or_else(|| BridgeError::MissingDependency {
+                dependency: "ProgramFiles".into(),
+                action: "Run PrintBridge under the owning interactive Windows user.".into(),
+            })?;
+        Ok(Self::new(WindowsLanConfig {
+            powershell: PathBuf::from("powershell.exe"),
+            script,
+            owner_token: owner_token.into(),
+            ipp_port,
+            agent_executable: agent_executable.into(),
+            vbox_headless_executable: PathBuf::from(program_files)
+                .join("Oracle/VirtualBox/VBoxHeadless.exe"),
+            approved_interface_alias,
+            approved_subnet,
+            command_timeout: Duration::from_secs(30),
+        }))
+    }
+
+    #[must_use]
+    pub fn new(config: WindowsLanConfig) -> Self {
+        Self {
+            runner: ProcessRunner,
+            config,
+        }
+    }
+}
+
+impl<R: CommandRunner> WindowsLanProvider<R> {
+    #[must_use]
+    pub const fn with_runner(config: WindowsLanConfig, runner: R) -> Self {
+        Self { runner, config }
+    }
+
+    pub fn status(&self) -> Result<LanStatus, BridgeError> {
+        let mut arguments = vec![
+            OsString::from("-NoLogo"),
+            OsString::from("-NoProfile"),
+            OsString::from("-NonInteractive"),
+            OsString::from("-ExecutionPolicy"),
+            OsString::from("Bypass"),
+            OsString::from("-File"),
+            self.config.script.as_os_str().to_os_string(),
+            OsString::from("-Action"),
+            OsString::from("Status"),
+            OsString::from("-OwnerToken"),
+            OsString::from(&self.config.owner_token),
+            OsString::from("-IppPort"),
+            OsString::from(self.config.ipp_port.to_string()),
+            OsString::from("-AgentExecutable"),
+            self.config.agent_executable.as_os_str().to_os_string(),
+            OsString::from("-VBoxHeadlessExecutable"),
+            self.config
+                .vbox_headless_executable
+                .as_os_str()
+                .to_os_string(),
+        ];
+        if let (Some(interface_alias), Some(subnet)) = (
+            &self.config.approved_interface_alias,
+            &self.config.approved_subnet,
+        ) {
+            arguments.push(OsString::from("-ApprovedInterfaceAlias"));
+            arguments.push(OsString::from(interface_alias));
+            arguments.push(OsString::from("-ApprovedSubnet"));
+            arguments.push(OsString::from(subnet));
+        }
+        let output = self.runner.run(
+            &self.config.powershell,
+            &arguments,
+            self.config.command_timeout,
+        )?;
+        let record = ProviderRecord::parse_with_header(&output.stdout, LAN_PROTOCOL)?;
+        if output.exit_code != Some(0) || !record.boolean("ok")? {
+            return Err(BridgeError::PermissionDenied {
+                operation: "checking approved-LAN sharing policy".into(),
+                action: record.optional_text("error_message")?.unwrap_or_else(|| {
+                    "Run PrintBridge Repair and inspect Windows Firewall.".into()
+                }),
+            });
+        }
+        let address = record
+            .optional_text("address")?
+            .map(|value| {
+                value
+                    .parse::<Ipv4Addr>()
+                    .map_err(|_| BridgeError::Internal {
+                        detail: "LAN provider returned an invalid IPv4 address".into(),
+                    })
+            })
+            .transpose()?;
+        Ok(LanStatus {
+            network_allowed: record.boolean("network_allowed")?,
+            interface_alias: record.optional_text("interface_alias")?,
+            network_category: record.optional_text("network_category")?,
+            address,
+            firewall_ready: record.boolean("firewall_ready")?,
+            reason: record.text("reason")?,
+        })
+    }
 }
 
 pub struct WindowsStartupProvider<R = ProcessRunner> {
@@ -548,7 +694,10 @@ mod tests {
 
     use printbridge_domain::{JobState, PrinterEndpoint, WindowsPrinting};
 
-    use super::{CommandOutput, CommandRunner, WindowsPrintProvider, WindowsProviderConfig};
+    use super::{
+        CommandOutput, CommandRunner, WindowsLanConfig, WindowsLanProvider, WindowsPrintProvider,
+        WindowsProviderConfig,
+    };
 
     struct ScriptedRunner {
         outputs: Mutex<Vec<CommandOutput>>,
@@ -676,5 +825,40 @@ mod tests {
         assert_eq!(result.state, JobState::Accepted);
         assert_eq!(result.spooler_job_id, Some(17));
         assert_eq!(result.correlation_id, "m5-correlation");
+    }
+
+    #[test]
+    fn lan_status_parses_the_explicit_scope_protocol() {
+        let runner = ScriptedRunner::new(vec![CommandOutput {
+            exit_code: Some(0),
+            stdout: "PRINTBRIDGE_LAN_V2\nok=true\nnetwork_allowed=true\ninterface_alias=RXRoZXJuZXQ=\nnetwork_category=UHVibGlj\naddress=MTkyLjE2OC4xLjIw\nfirewall_ready=true\nreason=cmVhZHk=\nerror_code=\nerror_message=\n".into(),
+            stderr: String::new(),
+        }]);
+        let provider = WindowsLanProvider::with_runner(
+            WindowsLanConfig {
+                powershell: "powershell.exe".into(),
+                script: "lan.ps1".into(),
+                owner_token: "00000000-0000-0000-0000-000000000004".into(),
+                ipp_port: 8644,
+                agent_executable: "agent.exe".into(),
+                vbox_headless_executable: "VBoxHeadless.exe".into(),
+                approved_interface_alias: Some("Ethernet".into()),
+                approved_subnet: Some("192.168.1.0/24".into()),
+                command_timeout: Duration::from_secs(5),
+            },
+            runner,
+        );
+        let status = provider.status().expect("LAN status");
+        assert!(status.network_allowed);
+        assert!(status.firewall_ready);
+        assert_eq!(status.interface_alias.as_deref(), Some("Ethernet"));
+        assert_eq!(status.network_category.as_deref(), Some("Public"));
+        assert_eq!(status.address.unwrap().to_string(), "192.168.1.20");
+        let calls = provider.runner.calls();
+        assert!(
+            calls[0]
+                .windows(2)
+                .any(|parts| parts == ["-Action", "Status"])
+        );
     }
 }

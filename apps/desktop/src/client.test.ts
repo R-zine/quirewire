@@ -14,8 +14,17 @@ const status: AgentStatus = {
     usb: { state: "ready", detail: "ready" },
     cups: { state: "ready", detail: "ready" },
     windows_queue: { state: "ready", detail: "ready" },
+    lan: { state: "ready", detail: "ready" },
   },
-  startup: { registered: true, task_name: "task", logoff_behavior: "logoff" },
+  startup: { registered: false, task_name: "task", logoff_behavior: "on demand" },
+  lan: {
+    enabled: true,
+    interface_alias: "Ethernet",
+    network_category: "private",
+    address: "192.168.1.20",
+    endpoint: "ipp://192.168.1.20:8644/printers/PrintBridge_DCP_L2600D",
+    service_instance: "Brother via PrintBridge",
+  },
 };
 
 describe("TauriPrintBridgeClient", () => {

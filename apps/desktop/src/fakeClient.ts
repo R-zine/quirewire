@@ -18,11 +18,20 @@ const readyStatus = (): AgentStatus => ({
     usb: { state: "ready", detail: "Selected printer is attached" },
     cups: { state: "ready", detail: "CUPS is accepting jobs" },
     windows_queue: { state: "ready", detail: "Microsoft IPP Class Driver" },
+    lan: { state: "ready", detail: "Available on explicitly approved LAN" },
   },
   startup: {
-    registered: true,
+    registered: false,
     task_name: "\\PrintBridge\\Agent",
-    logoff_behavior: "Printing resumes after the next Windows logon.",
+    logoff_behavior: "On-demand mode; no login task.",
+  },
+  lan: {
+    enabled: true,
+    interface_alias: "Ethernet",
+    network_category: "private",
+    address: "192.168.1.20",
+    endpoint: "ipp://192.168.1.20:8644/printers/PrintBridge_DCP_L2600D",
+    service_instance: "Brother via PrintBridge",
   },
 });
 
@@ -53,6 +62,7 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
         usb: { state: "not_configured", detail: "Choose the USB printer" },
         cups: { state: "not_configured", detail: "Guest printing is not configured" },
         windows_queue: { state: "not_configured", detail: "Windows queue is not installed" },
+        lan: { state: "not_configured", detail: "LAN sharing is not configured" },
       },
     };
     client.devices = client.devices.map((device) => ({ ...device, selected: false }));
@@ -104,7 +114,7 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
     this.calls.push("getDiagnostics");
     return {
       generated_at_unix_ms: Date.now(),
-      protocol_version: 4,
+      protocol_version: 6,
       owner_sid: "redacted-in-preview",
       pipe_name: "PrintBridge owner-only pipe",
       process_id: 1000,
@@ -126,8 +136,8 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
     this.calls.push("exportDiagnostics");
     return "Documents\\PrintBridge\\diagnostics-fake.json";
   }
-  async exitUi() {
-    this.calls.push("exitUi");
+  async exitPrintBridge() {
+    this.calls.push("exitPrintBridge");
   }
 }
 

@@ -1,6 +1,8 @@
 # PrintBridge
 
-PrintBridge has completed milestones M0 through M9:
+PrintBridge has completed milestones M0 through M9. M10 is the current
+on-demand trusted-LAN lifecycle change and remains gated on its bounded physical
+phone/LAN print acceptance:
 
 - **M0 — feasibility:** `PASS: PHYSICAL`
 - **M1 — manual VM/USB/CUPS spike:** `PASS: PHYSICAL`
@@ -15,12 +17,16 @@ PrintBridge has completed milestones M0 through M9:
 - **M8 — installer, repair, uninstallation:** `PASS: PHYSICAL`
 - **M9 — soak/observability/release candidate:** `PASS: PHYSICAL` (bounded
   10-scenario gate; seven optional stress repeats are explicitly deferred)
+- **M10 — on-demand trusted-LAN sharing:** `BLOCKED: REQUIRES HARDWARE` until
+  the current milestone report records LAN discovery, one physical page, and
+  explicit-exit shutdown.
 
 The proven product path remains:
 
 ```text
-Windows application -> Microsoft IPP Class Driver -> Linux CUPS
-                    -> Linux printer driver -> USB printer -> paper
+Windows application -> Microsoft IPP Class Driver --+
+Trusted LAN device -> DNS-SD + scoped IPP ----------+-> Linux CUPS
+                                                     -> Linux driver -> USB printer -> paper
 ```
 
 Read [`SPEC.md`](SPEC.md) for the authoritative design. Milestone evidence and

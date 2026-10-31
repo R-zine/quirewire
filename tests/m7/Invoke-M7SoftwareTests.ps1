@@ -65,7 +65,7 @@ Check 'frontend imports no provider or operating-system control code' {
 foreach ($command in @(
     'agent_get_status', 'agent_discover_devices', 'agent_begin_setup', 'agent_start',
     'agent_stop', 'agent_restart', 'agent_test_print', 'agent_get_diagnostics',
-    'agent_repair', 'export_diagnostics', 'exit_ui'
+    'agent_repair', 'export_diagnostics', 'exit_printbridge'
 )) {
     Check "fixed desktop command $command" {
         $frontendClient -match [regex]::Escape($command) -and
@@ -80,14 +80,13 @@ Check 'close hides UI without stopping engine' {
         $tauriBackend -match 'prevent_close' -and
         $tauriBackend -match 'window\.hide'
 }
-Check 'Exit UI invokes app exit only' {
-    $tauriBackend -match '(?s)fn exit_ui\(.+?app\.exit\(0\);\s*}' -and
-        $tauriBackend -notmatch '(?s)fn exit_ui\(.+?Command::Stop'
+Check 'explicit Exit requests graceful agent shutdown before app exit' {
+    $tauriBackend -match '(?s)fn exit_printbridge\(.+?Command::Shutdown.+?app\.exit\(0\)'
 }
-foreach ($label in @('Open PrintBridge', 'Test page', 'Restart bridge', 'View diagnostics', 'Exit UI')) {
+foreach ($label in @('Open PrintBridge', 'Test page', 'Restart bridge', 'View diagnostics', 'Exit PrintBridge (stop sharing)')) {
     Check "tray item $label" { $tauriBackend -match [regex]::Escape($label) }
 }
-Check 'tray Exit UI explains engine survival' { $tauriBackend -match 'Exit UI \(engine keeps running\)' }
+Check 'tray Exit explains sharing shutdown' { $tauriBackend -match 'Exit PrintBridge \(stop sharing\)' }
 Check 'explicit non-null content security policy' {
     -not [string]::IsNullOrWhiteSpace($config.app.security.csp) -and
         $config.app.security.csp -match "default-src 'self'"
@@ -117,6 +116,13 @@ Check 'acceptance recorder cannot synthesize a physical pass' { $negativeRecord.
 
 $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
 if ($null -eq $npm) { $npm = Get-Command npm -ErrorAction SilentlyContinue }
+if ($null -eq $npm) {
+    $wingetRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    $candidate = Get-ChildItem -LiteralPath $wingetRoot -Filter npm.cmd -File -Recurse `
+        -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'OpenJS\.NodeJS\.LTS_' } |
+        Sort-Object FullName -Descending | Select-Object -First 1
+    if ($candidate) { $npm = $candidate }
+}
 Check 'Node npm toolchain available' { $null -ne $npm }
 if ($null -ne $npm) {
     Push-Location $desktopRoot

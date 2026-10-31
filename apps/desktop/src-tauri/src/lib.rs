@@ -1,4 +1,5 @@
 mod client;
+mod runtime;
 
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -104,8 +105,13 @@ async fn export_diagnostics(
 }
 
 #[tauri::command]
-fn exit_ui(app: AppHandle) {
+async fn exit_printbridge(
+    app: AppHandle,
+    client: State<'_, AgentClient>,
+) -> Result<(), DesktopError> {
+    client.inner().clone().operation(Command::Shutdown).await?;
     app.exit(0);
+    Ok(())
 }
 
 fn export_error(error: std::io::Error) -> DesktopError {
@@ -166,7 +172,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let exit = MenuItem::with_id(
         app,
         "exit",
-        "Exit UI (engine keeps running)",
+        "Exit PrintBridge (stop sharing)",
         true,
         None::<&str>,
     )?;
@@ -174,7 +180,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("printbridge-tray")
         .icon(app.default_window_icon().expect("desktop icon").clone())
-        .tooltip("PrintBridge — printing continues when this UI is closed")
+        .tooltip("PrintBridge — LAN printing is available while this app is running")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -188,7 +194,25 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 spawn_tray_command(app.clone(), Command::Restart);
             }
             "diagnostics" => emit_navigation(app, "diagnostics"),
-            "exit" => app.exit(0),
+            "exit" => {
+                let app = app.clone();
+                let client = app.state::<AgentClient>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    match client.operation(Command::Shutdown).await {
+                        Ok(_) => app.exit(0),
+                        Err(error) => {
+                            let _ = app.emit(
+                                "printbridge:operation",
+                                TrayOperation {
+                                    ok: false,
+                                    message: error.message,
+                                },
+                            );
+                            show_main_window(&app);
+                        }
+                    }
+                });
+            }
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -213,6 +237,12 @@ pub fn run() {
         .manage(AgentClient::default())
         .setup(|app| {
             build_tray(app)?;
+            let resource_dir = app.path().resource_dir()?;
+            runtime::start(
+                app.handle().clone(),
+                resource_dir,
+                app.state::<AgentClient>().inner().clone(),
+            );
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -232,7 +262,7 @@ pub fn run() {
             agent_get_diagnostics,
             agent_repair,
             export_diagnostics,
-            exit_ui,
+            exit_printbridge,
         ])
         .run(tauri::generate_context!())
         .expect("PrintBridge desktop runtime failed");

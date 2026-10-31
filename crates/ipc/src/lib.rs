@@ -12,12 +12,12 @@ pub mod windows_pipe;
 
 pub use wire::{
     AgentComponents, AgentEvent, AgentStatus, Command, CommandResult, DeviceSummary, Diagnostics,
-    ErrorPayload, MAX_FRAME_BYTES, OperationResult, Payload, RequestEnvelope, ResponseEnvelope,
-    StartupStatus, TestPrintResult, WireComponent, WireComponentState, WireError, read_request,
-    read_response, write_request, write_response,
+    ErrorPayload, LanStatus, MAX_FRAME_BYTES, OperationResult, Payload, RequestEnvelope,
+    ResponseEnvelope, StartupStatus, TestPrintResult, WireComponent, WireComponentState, WireError,
+    read_request, read_response, write_request, write_response,
 };
 
-pub const PROTOCOL_VERSION: u16 = 4;
+pub const PROTOCOL_VERSION: u16 = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {

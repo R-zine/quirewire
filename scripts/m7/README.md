@@ -1,5 +1,8 @@
 # M7 desktop acceptance
 
+> Historical M7 behavior is superseded by M10. The current app is on-demand:
+> window close hides to tray, while explicit Exit stops sharing, agent and VM.
+
 M7 is accepted only against the real owner-only M6 agent and a physically
 printed page. Browser preview/fake-client tests do not satisfy this gate.
 

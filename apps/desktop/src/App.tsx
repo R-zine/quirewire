@@ -32,6 +32,7 @@ const componentLabels: Record<keyof AgentStatus["components"], string> = {
   usb: "USB printer",
   cups: "CUPS",
   windows_queue: "Windows queue",
+  lan: "Local network",
 };
 
 export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppProps) {
@@ -47,6 +48,7 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
   const [error, setError] = useState<ClientError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [exportPath, setExportPath] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
 
   const showError = useCallback((value: unknown) => {
     setError(value instanceof ClientError ? value : new ClientError({
@@ -136,7 +138,21 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
     }
   }, [refreshStatus, showError]);
 
+  const exitPrintBridge = useCallback(async () => {
+    setClosing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await client.exitPrintBridge();
+    } catch (value) {
+      setClosing(false);
+      showError(value);
+    }
+  }, [client, showError]);
+
   const overall = status?.overall ?? (error ? "unavailable" : "loading");
+
+  if (closing) return <ClosingState />;
 
   return (
     <div className="app-shell">
@@ -266,7 +282,7 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
                       void runOperation("stop", () => client.stop());
                     }
                   }}
-                  onExit={() => void client.exitUi()}
+                  onExit={() => void exitPrintBridge()}
                 />
               )}
             </>
@@ -278,6 +294,18 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
   );
 }
 
+function ClosingState() {
+  return <main className="closing-state" role="status" aria-live="assertive" aria-busy="true">
+    <section className="closing-card">
+      <span className="closing-spinner" aria-hidden="true" />
+      <p className="eyebrow">Shutting down</p>
+      <h1>Closing PrintBridge…</h1>
+      <p>Stopping local-network discovery, releasing the printer, and shutting down the owned virtual machine.</p>
+      <small>This window will close automatically when cleanup is complete.</small>
+    </section>
+  </main>;
+}
+
 function Dashboard({ status, busy, onRestart, onTest, onSetup }: {
   status: AgentStatus; busy: string | null; onRestart(): void; onTest(): void; onSetup(): void;
 }) {
@@ -287,7 +315,7 @@ function Dashboard({ status, busy, onRestart, onTest, onSetup }: {
       <div className="hero-copy">
         <div className="hero-icon" aria-hidden="true">{ready ? "✓" : "!"}</div>
         <div><p className="eyebrow">Current status</p><h2>{ready ? "Ready to print" : pretty(status.overall)}</h2>
-          <p>{ready ? "Brother via PrintBridge is available in standard Windows print dialogs." : overallGuidance(status.overall)}</p></div>
+          <p>{ready ? "Brother via PrintBridge is available to Windows and trusted local-network devices." : overallGuidance(status.overall)}</p></div>
       </div>
       <div className="hero-actions">
         <button className="button primary" onClick={onTest}>Print a test page</button>
@@ -305,7 +333,7 @@ function Dashboard({ status, busy, onRestart, onTest, onSetup }: {
         </article>;
       })}
     </section>
-    <section className="info-strip"><span aria-hidden="true">●</span><div><strong>The desktop can stay closed</strong><p>The background agent and Linux guest keep printing. Use the tray icon to reopen this window.</p></div></section>
+    <section className="info-strip"><span aria-hidden="true">●</span><div><strong>The window may be closed to the tray</strong><p>Printing remains available while the PrintBridge tray app is running. Exit PrintBridge to stop sharing and release VM memory.</p></div></section>
   </div>;
 }
 
@@ -316,7 +344,8 @@ function Setup({ status, devices, selectedDevice, consent, busy, onConsent, onSe
   const prerequisites = [
     ["VirtualBox", status.components.hypervisor],
     ["Linux appliance", status.components.guest],
-    ["Windows startup", { state: status.startup.registered ? "ready" : "degraded", detail: status.startup.registered ? "Agent starts at Windows logon" : "Startup task needs repair" }],
+    ["On-demand lifecycle", { state: status.startup.registered ? "error" : "ready", detail: status.startup.registered ? "A legacy login task must be removed by Repair" : "No login task; the app owns the agent and VM" }],
+    ["Trusted local network", status.components.lan],
   ] as const;
   return <div className="screen-stack narrow">
     <section className="page-intro"><span className="step-number">1</span><div><p className="eyebrow">Prerequisites</p><h2>Check the printing foundation</h2><p>PrintBridge uses a private Linux guest and the Microsoft IPP Class Driver. It never installs a Brother Windows driver.</p></div></section>
@@ -370,9 +399,9 @@ function Settings({ status, theme, busy, onTheme, onStart, onStop, onExit }: {
 }) {
   return <div className="screen-stack narrow">
     <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">Appearance</p><h2>Theme</h2></div></div><fieldset className="segmented"><legend className="sr-only">Color theme</legend>{(["system", "light", "dark"] as ThemePreference[]).map((value) => <label key={value}><input type="radio" name="theme" checked={theme === value} onChange={() => onTheme(value)} /><span>{pretty(value)}</span></label>)}</fieldset><p className="setting-help">Theme preference stays in this UI process. No credentials or driver files are stored in webview storage.</p></section>
-    <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">Windows startup</p><h2>Background engine</h2></div><StatusBadge state={status.startup.registered ? "ready" : "degraded"} /></div><div className="setting-row"><div><strong>{status.startup.task_name}</strong><p>{status.startup.logoff_behavior}</p></div><span className="read-only-label">Managed by agent</span></div><div className="engine-actions"><button className="button primary" onClick={onStart} disabled={busy !== null || status.desired === "running"}>Start engine</button><button className="button danger" onClick={onStop} disabled={busy !== null || status.desired === "stopped"}>Stop printing engine</button></div></section>
-    <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">Desktop behavior</p><h2>Window and tray</h2></div></div><div className="setting-row"><div><strong>Closing the window keeps printing active</strong><p>Close hides PrintBridge in the notification area. Exit UI removes the tray icon but does not stop the engine.</p></div><button className="button secondary" onClick={onExit}>Exit UI only</button></div></section>
-    <section className="about-card"><div className="brand-mark small" aria-hidden="true"><span /></div><div><strong>PrintBridge 0.1.0</strong><p>Protocol v4 · Tauri 2 desktop</p></div><span>Printing only · scanner and fax are not supported</span></section>
+    <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">On demand</p><h2>Printing engine</h2></div><StatusBadge state={status.startup.registered ? "error" : "ready"} /></div><div className="setting-row"><div><strong>No Windows login task</strong><p>{status.startup.logoff_behavior}</p></div><span className="read-only-label">App-owned</span></div><div className="setting-row"><div><strong>LAN endpoint</strong><p>{status.lan.endpoint ?? "Unavailable until an explicitly approved local subnet is active"}</p></div><span className="read-only-label">{status.lan.interface_alias ? `${status.lan.interface_alias} · ${pretty(status.lan.network_category ?? "unknown")}` : "Not shared"}</span></div><div className="engine-actions"><button className="button primary" onClick={onStart} disabled={busy !== null || status.desired === "running"}>Start engine</button><button className="button danger" onClick={onStop} disabled={busy !== null || status.desired === "stopped"}>Stop printing engine</button></div></section>
+    <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">Desktop behavior</p><h2>Window and tray</h2></div></div><div className="setting-row"><div><strong>Closing the window keeps printing active</strong><p>Close hides PrintBridge in the notification area. Explicit Exit stops LAN discovery, the agent, and the owned VM.</p></div><button className="button secondary" onClick={onExit}>Exit PrintBridge</button></div></section>
+    <section className="about-card"><div className="brand-mark small" aria-hidden="true"><span /></div><div><strong>PrintBridge 0.1.0</strong><p>Protocol v6 · Tauri 2 desktop</p></div><span>Printing only · scanner and fax are not supported</span></section>
   </div>;
 }
 
@@ -404,13 +433,13 @@ function pretty(value: string): string {
 }
 
 function componentIcon(key: keyof AgentStatus["components"]): string {
-  return ({ hypervisor: "V", guest: "L", usb: "U", cups: "C", windows_queue: "W" })[key];
+  return ({ hypervisor: "V", guest: "L", usb: "U", cups: "C", windows_queue: "W", lan: "N" })[key];
 }
 
 function overallGuidance(state: string): string {
   if (state === "waiting_for_usb" || state === "waiting") return "Power on and reconnect the selected USB printer. Recovery is automatic.";
   if (state === "not_configured") return "Complete setup to create the local printing path.";
-  if (state === "stopped") return "The printing engine is stopped. Start it from Settings when you are ready.";
+  if (state === "stopped") return "The printing engine is stopped. Opening PrintBridge starts it; explicit Exit stops it.";
   return "Review the component details below or run a safe repair from Diagnostics.";
 }
 

@@ -13,14 +13,19 @@ use printbridge_domain::{
 };
 use printbridge_ipc::{
     AgentComponents, AgentEvent, AgentStatus, Command, DeviceSummary, Diagnostics, ErrorPayload,
-    OperationResult, PROTOCOL_VERSION, Payload, RequestEnvelope, ResponseEnvelope, StartupStatus,
-    TestPrintResult, WireComponent, WireComponentState, WireError, read_request, write_response,
+    LanStatus as WireLanStatus, OperationResult, PROTOCOL_VERSION, Payload, RequestEnvelope,
+    ResponseEnvelope, StartupStatus, TestPrintResult, WireComponent, WireComponentState, WireError,
+    read_request, write_response,
 };
 use printbridge_provider_cups::CupsIppProvider;
+use printbridge_provider_lan::{LanAdvertisement, LanAdvertiser};
 use printbridge_provider_virtualbox::VirtualBoxProvider;
-use printbridge_provider_windows::{WindowsPrintProvider, WindowsStartupProvider};
+use printbridge_provider_windows::{
+    WindowsLanProvider, WindowsPrintProvider, WindowsStartupProvider,
+};
 use serde::{Deserialize, Serialize};
 use tokio::io::BufReader;
+use tokio::sync::Notify;
 
 pub const M6_CONFIG_SCHEMA: &str = "printbridge.m6.config.v1";
 const STATE_SCHEMA: &str = "printbridge.m6.state.v1";
@@ -30,6 +35,7 @@ const TICK_INTERVAL: Duration = Duration::from_secs(1);
 const HEALTHY_INTERVAL: Duration = Duration::from_secs(10);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 const STARTUP_CHECK_INTERVAL: Duration = Duration::from_secs(60);
+const DESKTOP_LEASE: Duration = Duration::from_secs(20);
 const MAX_EVENTS: usize = 128;
 const MAX_REQUEST_CACHE: usize = 128;
 
@@ -41,6 +47,13 @@ pub struct M6Config {
     pub usb: UsbIdentity,
     pub printer_name: String,
     pub endpoint: PrinterEndpoint,
+    pub approved_lan: Option<ApprovedLan>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovedLan {
+    pub interface_alias: String,
+    pub subnet: String,
 }
 
 impl M6Config {
@@ -76,6 +89,8 @@ impl M6Config {
                     | "printer_name"
                     | "endpoint_port"
                     | "guest_queue"
+                    | "lan_interface_alias"
+                    | "lan_subnet"
             ) {
                 return Err(config_error(format!("unknown key '{key}'")));
             }
@@ -129,6 +144,27 @@ impl M6Config {
         {
             return Err(config_error("guest_queue contains unsafe characters"));
         }
+        let approved_lan = match (values.get("lan_interface_alias"), values.get("lan_subnet")) {
+            (None, None) => None,
+            (Some(interface_alias), Some(subnet)) => {
+                if interface_alias.is_empty()
+                    || interface_alias.len() > 128
+                    || interface_alias.chars().any(char::is_control)
+                {
+                    return Err(config_error("lan_interface_alias is invalid"));
+                }
+                validate_lan_subnet(subnet)?;
+                Some(ApprovedLan {
+                    interface_alias: interface_alias.clone(),
+                    subnet: subnet.clone(),
+                })
+            }
+            _ => {
+                return Err(config_error(
+                    "lan_interface_alias and lan_subnet must be provided together",
+                ));
+            }
+        };
         Ok(Self {
             owner_sid: owner_sid.into(),
             vm: OwnedVm {
@@ -146,6 +182,7 @@ impl M6Config {
                 port,
                 queue: queue.into(),
             },
+            approved_lan,
         })
     }
 }
@@ -181,6 +218,10 @@ struct PersistedState {
     endpoint_port: u16,
     guest_queue: String,
     printer_name: String,
+    #[serde(default)]
+    lan_interface_alias: Option<String>,
+    #[serde(default)]
+    lan_subnet: Option<String>,
 }
 
 impl PersistedState {
@@ -188,7 +229,7 @@ impl PersistedState {
         Self {
             schema: STATE_SCHEMA.into(),
             revision: 0,
-            desired: DesiredState::Running,
+            desired: DesiredState::Stopped,
             vm_uuid: config.vm.id.as_str().into(),
             vm_marker: config.vm.marker.as_str().into(),
             vm_schema: config.vm_schema.clone(),
@@ -198,6 +239,11 @@ impl PersistedState {
             endpoint_port: config.endpoint.port(),
             guest_queue: config.endpoint.queue().into(),
             printer_name: config.printer_name.clone(),
+            lan_interface_alias: config
+                .approved_lan
+                .as_ref()
+                .map(|lan| lan.interface_alias.clone()),
+            lan_subnet: config.approved_lan.as_ref().map(|lan| lan.subnet.clone()),
         }
     }
 
@@ -212,6 +258,12 @@ impl PersistedState {
             && self.endpoint_port == config.endpoint.port()
             && self.guest_queue == config.endpoint.queue()
             && self.printer_name == config.printer_name
+            && self.lan_interface_alias
+                == config
+                    .approved_lan
+                    .as_ref()
+                    .map(|lan| lan.interface_alias.clone())
+            && self.lan_subnet == config.approved_lan.as_ref().map(|lan| lan.subnet.clone())
     }
 }
 
@@ -239,6 +291,17 @@ impl StateStore {
             }
         }
         candidates.sort_by_key(|(revision, _)| std::cmp::Reverse(*revision));
+        let next_revision = candidates
+            .first()
+            .map(|(revision, _)| {
+                revision
+                    .checked_add(1)
+                    .ok_or_else(|| BridgeError::Internal {
+                        detail: "state revision overflow during configuration migration".into(),
+                    })
+            })
+            .transpose()?
+            .unwrap_or(0);
         for (revision, path) in candidates {
             let Ok(contents) = fs::read(&path) else {
                 continue;
@@ -250,7 +313,8 @@ impl StateStore {
                 return Ok(state);
             }
         }
-        let state = PersistedState::from_config(config);
+        let mut state = PersistedState::from_config(config);
+        state.revision = next_revision;
         self.persist(&state)?;
         Ok(state)
     }
@@ -289,6 +353,7 @@ impl StateStore {
 struct Observation {
     components: AgentComponents,
     startup: StartupStatus,
+    lan: WireLanStatus,
 }
 
 trait ReconcileBackend: Send {
@@ -303,6 +368,9 @@ struct RealBackend {
     cups: CupsIppProvider,
     windows: WindowsPrintProvider,
     startup: WindowsStartupProvider,
+    lan_policy: WindowsLanProvider,
+    advertiser: LanAdvertiser,
+    lan_status: WireLanStatus,
     startup_registered: Option<bool>,
     startup_checked: Option<Instant>,
 }
@@ -312,6 +380,12 @@ impl RealBackend {
         let executable = std::env::current_exe().map_err(|error| BridgeError::Internal {
             detail: format!("cannot resolve agent executable: {error}"),
         })?;
+        let mut startup = WindowsStartupProvider::discover(
+            executable.clone(),
+            config_path,
+            config.owner_sid.clone(),
+        )?;
+        startup.disable_login_start()?;
         Ok(Self {
             virtualbox: VirtualBoxProvider::discover_with_ownership_schema(&config.vm_schema)?,
             cups: CupsIppProvider::new(config.endpoint.clone(), Duration::from_secs(5)),
@@ -319,11 +393,19 @@ impl RealBackend {
                 config.printer_name.clone(),
                 config.endpoint.clone(),
             )?,
-            startup: WindowsStartupProvider::discover(
+            startup,
+            lan_policy: WindowsLanProvider::discover(
+                config.vm.id.as_str(),
+                config.endpoint.port(),
                 executable,
-                config_path,
-                config.owner_sid.clone(),
+                config
+                    .approved_lan
+                    .as_ref()
+                    .map(|lan| lan.interface_alias.clone()),
+                config.approved_lan.as_ref().map(|lan| lan.subnet.clone()),
             )?,
+            advertiser: LanAdvertiser::new(),
+            lan_status: inactive_lan_status(),
             startup_registered: None,
             startup_checked: None,
         })
@@ -344,9 +426,87 @@ impl RealBackend {
         StartupStatus {
             registered: self.startup_registered.unwrap_or(false),
             task_name: TASK_NAME.into(),
-            logoff_behavior:
-                "interactive per-user agent terminates at logoff; printing resumes after next logon"
-                    .into(),
+            logoff_behavior: "On-demand mode: opening PrintBridge starts sharing; Exit stops the VM and agent. The login task must remain absent."
+                .into(),
+        }
+    }
+
+    fn prepare_lan(&mut self, config: &M6Config) -> (WireComponent, Option<Ipv4Addr>) {
+        let policy = match self.lan_policy.status() {
+            Ok(value) => value,
+            Err(error) => {
+                let _ = self.advertiser.stop();
+                self.lan_status = inactive_lan_status();
+                return (component_error(&error), None);
+            }
+        };
+        let Some(address) = policy.address else {
+            return (self.deactivate_lan(config, &policy.reason), None);
+        };
+        if !policy.network_allowed || !policy.firewall_ready {
+            return (self.deactivate_lan(config, &policy.reason), None);
+        }
+        if let Err(error) =
+            self.virtualbox
+                .ensure_lan_ipp_forward(&config.vm, address, config.endpoint.port(), 631)
+        {
+            let _ = self.advertiser.stop();
+            self.lan_status = inactive_lan_status();
+            return (component_error(&error), None);
+        }
+        let endpoint = format!(
+            "ipp://{address}:{}/printers/{}",
+            config.endpoint.port(),
+            config.endpoint.queue()
+        );
+        self.lan_status = WireLanStatus {
+            enabled: false,
+            interface_alias: policy.interface_alias,
+            network_category: policy.network_category,
+            address: Some(address.to_string()),
+            endpoint: Some(endpoint),
+            service_instance: Some(config.printer_name.clone()),
+        };
+        (
+            connecting("Approved LAN forward is ready; waiting to advertise the printer"),
+            Some(address),
+        )
+    }
+
+    fn deactivate_lan(&mut self, config: &M6Config, reason: &str) -> WireComponent {
+        let advertisement = self.advertiser.stop();
+        let forwarding = self.virtualbox.remove_lan_ipp_forward(&config.vm);
+        self.lan_status = inactive_lan_status();
+        match advertisement.and(forwarding) {
+            Ok(()) => waiting(reason),
+            Err(error_value) => error(error_value.to_string()),
+        }
+    }
+
+    fn activate_lan(&mut self, config: &M6Config, address: Ipv4Addr) -> WireComponent {
+        let capabilities = match self.cups.advertisement() {
+            Ok(value) => value,
+            Err(error) => return component_error(&error),
+        };
+        let advertisement = LanAdvertisement {
+            instance_name: config.printer_name.clone(),
+            hostname: "printbridge-m4.local.".into(),
+            address,
+            port: config.endpoint.port(),
+            queue: config.endpoint.queue().into(),
+            make_model: capabilities.make_model,
+            formats: capabilities.formats,
+            urf: capabilities.urf,
+            uuid: capabilities.uuid,
+            color: capabilities.color,
+            duplex: capabilities.duplex,
+        };
+        match self.advertiser.start(advertisement) {
+            Ok(()) => {
+                self.lan_status.enabled = true;
+                ready("Available to devices on the explicitly approved local subnet")
+            }
+            Err(error_value) => error(error_value.to_string()),
         }
     }
 
@@ -356,14 +516,18 @@ impl RealBackend {
             Err(error) => component_error(&error),
         };
         if hypervisor.state == WireComponentState::Error {
+            let _ = self.advertiser.stop();
+            self.lan_status = inactive_lan_status();
             return AgentComponents {
                 hypervisor,
                 guest: blocked("VirtualBox is unavailable"),
                 usb: blocked("Guest is unavailable"),
                 cups: blocked("Guest is unavailable"),
                 windows_queue: self.windows_component(config),
+                lan: blocked("LAN sharing is unavailable"),
             };
         }
+        let (mut lan, lan_address) = self.prepare_lan(config);
         let guest_status = match self.virtualbox.guest_state(&config.vm) {
             Ok(status) => status,
             Err(error) => {
@@ -373,6 +537,7 @@ impl RealBackend {
                     usb: blocked("Guest ownership could not be verified"),
                     cups: blocked("Guest is unavailable"),
                     windows_queue: self.windows_component(config),
+                    lan,
                 };
             }
         };
@@ -384,6 +549,7 @@ impl RealBackend {
                     usb: blocked("Guest could not start"),
                     cups: blocked("Guest could not start"),
                     windows_queue: self.windows_component(config),
+                    lan,
                 };
             }
             let guest = match self.virtualbox.start_headless(&config.vm) {
@@ -396,6 +562,7 @@ impl RealBackend {
                 usb: blocked("Waiting for guest startup"),
                 cups: blocked("Waiting for guest startup"),
                 windows_queue: self.windows_component(config),
+                lan,
             };
         }
         let guest = from_domain(guest_status);
@@ -425,6 +592,15 @@ impl RealBackend {
                 Err(error) => component_error(&error),
             };
         }
+        if let Some(address) = lan_address {
+            if cups.state == WireComponentState::Ready && usb.state == WireComponentState::Ready {
+                lan = self.activate_lan(config, address);
+            } else {
+                let _ = self.advertiser.stop();
+                self.lan_status.enabled = false;
+                lan = waiting("LAN endpoint is reserved; waiting for USB and CUPS readiness");
+            }
+        }
         let windows_queue = self.windows_component(config);
         AgentComponents {
             hypervisor,
@@ -432,6 +608,7 @@ impl RealBackend {
             usb,
             cups,
             windows_queue,
+            lan,
         }
     }
 
@@ -466,8 +643,15 @@ impl ReconcileBackend for RealBackend {
     fn observe(&mut self, config: &M6Config, desired: DesiredState, repair: bool) -> Observation {
         let startup = self.startup_status();
         let components = if desired == DesiredState::Stopped {
+            let advertisement = self.advertiser.stop();
             let guest = match self.virtualbox.stop_gracefully(&config.vm) {
                 Ok(()) => stopped("Owned VM is stopped by desired state"),
+                Err(error) => component_error(&error),
+            };
+            let forwarding = self.virtualbox.remove_lan_ipp_forward(&config.vm);
+            self.lan_status = inactive_lan_status();
+            let lan = match advertisement.and(forwarding) {
+                Ok(()) => stopped("LAN forwarding and discovery are off"),
                 Err(error) => component_error(&error),
             };
             AgentComponents {
@@ -476,6 +660,7 @@ impl ReconcileBackend for RealBackend {
                 usb: stopped("USB capture inactive while bridge is stopped"),
                 cups: stopped("CUPS endpoint inactive while bridge is stopped"),
                 windows_queue: self.windows_component(config),
+                lan,
             }
         } else {
             self.running_components(config, repair)
@@ -483,6 +668,7 @@ impl ReconcileBackend for RealBackend {
         Observation {
             components,
             startup,
+            lan: self.lan_status.clone(),
         }
     }
 
@@ -506,8 +692,8 @@ impl ReconcileBackend for RealBackend {
                     .into(),
             });
         }
-        self.startup.enable_login_start()?;
-        self.startup_registered = Some(true);
+        self.startup.disable_login_start()?;
+        self.startup_registered = Some(false);
         self.startup_checked = Some(Instant::now());
         Ok(())
     }
@@ -544,6 +730,9 @@ struct Supervisor<B> {
     state_path: PathBuf,
     log_path: PathBuf,
     pipe_name: String,
+    on_demand: bool,
+    last_heartbeat: Instant,
+    shutdown_requested: bool,
 }
 
 impl<B: ReconcileBackend> Supervisor<B> {
@@ -553,9 +742,21 @@ impl<B: ReconcileBackend> Supervisor<B> {
         log_path: PathBuf,
         pipe_name: String,
         backend: B,
+        on_demand: bool,
     ) -> Result<Self, BridgeError> {
         let store = StateStore::new(state_directory.clone())?;
-        let state = store.load(&config)?;
+        let mut state = store.load(&config)?;
+        if on_demand && state.desired != DesiredState::Stopped {
+            state.revision =
+                state
+                    .revision
+                    .checked_add(1)
+                    .ok_or_else(|| BridgeError::Internal {
+                        detail: "state revision overflow".into(),
+                    })?;
+            state.desired = DesiredState::Stopped;
+            store.persist(&state)?;
+        }
         let status = initial_status(&state);
         let mut supervisor = Self {
             config,
@@ -572,6 +773,9 @@ impl<B: ReconcileBackend> Supervisor<B> {
             state_path: state_directory,
             log_path,
             pipe_name,
+            on_demand,
+            last_heartbeat: Instant::now(),
+            shutdown_requested: false,
         };
         supervisor.event(
             "info",
@@ -620,11 +824,13 @@ impl<B: ReconcileBackend> Supervisor<B> {
                 self.backend.begin_setup(&self.config, device_index)?;
                 self.set_desired(DesiredState::Running)?;
                 self.reconcile(false);
+                self.refresh_desktop_lease();
                 Ok(Payload::Operation(operation("begin_setup")))
             }
             Command::Start => {
                 self.set_desired(DesiredState::Running)?;
                 self.reconcile(false);
+                self.refresh_desktop_lease();
                 Ok(Payload::Operation(operation("start")))
             }
             Command::Stop => {
@@ -637,6 +843,7 @@ impl<B: ReconcileBackend> Supervisor<B> {
                 self.reconcile(false);
                 self.set_desired(DesiredState::Running)?;
                 self.reconcile(false);
+                self.refresh_desktop_lease();
                 Ok(Payload::Operation(operation("restart")))
             }
             Command::TestPrint => Ok(Payload::TestPrint(self.backend.test_print(&self.config)?)),
@@ -644,7 +851,18 @@ impl<B: ReconcileBackend> Supervisor<B> {
             Command::Repair => {
                 self.set_desired(DesiredState::Running)?;
                 self.reconcile(true);
+                self.refresh_desktop_lease();
                 Ok(Payload::Operation(operation("repair")))
+            }
+            Command::Heartbeat => {
+                self.last_heartbeat = Instant::now();
+                Ok(Payload::Operation(operation("heartbeat")))
+            }
+            Command::Shutdown => {
+                self.set_desired(DesiredState::Stopped)?;
+                self.reconcile(false);
+                self.shutdown_requested = true;
+                Ok(Payload::Operation(operation("shutdown")))
             }
         }
     }
@@ -667,7 +885,28 @@ impl<B: ReconcileBackend> Supervisor<B> {
         Ok(())
     }
 
+    fn refresh_desktop_lease(&mut self) {
+        if self.on_demand {
+            self.last_heartbeat = Instant::now();
+        }
+    }
+
     fn tick(&mut self) {
+        if self.on_demand
+            && !self.shutdown_requested
+            && Instant::now().saturating_duration_since(self.last_heartbeat) >= DESKTOP_LEASE
+        {
+            self.event(
+                "warning",
+                "desktop_lease_expired",
+                "Desktop heartbeat stopped; shutting down on-demand sharing",
+            );
+            if self.set_desired(DesiredState::Stopped).is_ok() {
+                self.reconcile(false);
+            }
+            self.shutdown_requested = true;
+            return;
+        }
         if Instant::now() >= self.next_reconcile {
             self.reconcile(false);
         }
@@ -697,6 +936,7 @@ impl<B: ReconcileBackend> Supervisor<B> {
             retry_after_ms: unhealthy.then_some(delay.as_millis() as u64),
             components: observation.components,
             startup: observation.startup,
+            lan: observation.lan,
         };
         if self.status != prior {
             let detail = self.status.overall.clone();
@@ -719,7 +959,7 @@ impl<B: ReconcileBackend> Supervisor<B> {
                 "USB serial values are intentionally redacted from IPC, logs, and diagnostics."
                     .into(),
                 "Spooler acceptance and CUPS completion do not prove physical paper output.".into(),
-                "The per-user interactive agent is unavailable after logoff until the next logon."
+                "PrintBridge is on-demand: explicit Exit or a lost desktop heartbeat stops LAN sharing and the owned VM."
                     .into(),
             ],
         }
@@ -762,7 +1002,10 @@ impl<B: ReconcileBackend> Supervisor<B> {
     }
 }
 
-pub async fn run_agent(config_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_agent(
+    config_path: PathBuf,
+    on_demand: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let config = M6Config::load(&config_path)?;
     let current_sid = printbridge_ipc::windows_pipe::current_user_sid()?;
     if current_sid != config.owner_sid {
@@ -792,37 +1035,57 @@ pub async fn run_agent(config_path: PathBuf) -> Result<(), Box<dyn std::error::E
         root.join("logs/agent.jsonl"),
         factory.pipe_name().into(),
         backend,
+        on_demand,
     )?));
+    let shutdown = Arc::new(Notify::new());
     let reconcile_supervisor = Arc::clone(&supervisor);
+    let reconcile_shutdown = Arc::clone(&shutdown);
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(TICK_INTERVAL).await;
             let supervisor = Arc::clone(&reconcile_supervisor);
-            let _ = tokio::task::spawn_blocking(move || {
+            let should_shutdown = tokio::task::spawn_blocking(move || {
                 if let Ok(mut guard) = supervisor.lock() {
                     guard.tick();
+                    guard.shutdown_requested
+                } else {
+                    true
                 }
             })
-            .await;
+            .await
+            .unwrap_or(true);
+            if should_shutdown {
+                reconcile_shutdown.notify_one();
+                break;
+            }
         }
     });
     loop {
-        server.connect().await?;
+        tokio::select! {
+            result = server.connect() => result?,
+            () = shutdown.notified() => break,
+        }
         let connected = server;
         server = factory.create_next()?;
         let supervisor = Arc::clone(&supervisor);
+        let connection_shutdown = Arc::clone(&shutdown);
         tokio::spawn(async move {
-            if let Err(error) = serve_connection(connected, supervisor).await {
-                eprintln!("printbridge-agent IPC: {error}");
+            match serve_connection(connected, supervisor).await {
+                Ok(true) => connection_shutdown.notify_one(),
+                Ok(false) => {}
+                Err(error) => {
+                    eprintln!("printbridge-agent IPC: {error}");
+                }
             }
         });
     }
+    Ok(())
 }
 
 async fn serve_connection<B: ReconcileBackend + 'static>(
     stream: tokio::net::windows::named_pipe::NamedPipeServer,
     supervisor: Arc<Mutex<Supervisor<B>>>,
-) -> Result<(), WireError> {
+) -> Result<bool, WireError> {
     let (reader, mut writer) = tokio::io::split(stream);
     let request = tokio::time::timeout(
         Duration::from_secs(10),
@@ -835,15 +1098,19 @@ async fn serve_connection<B: ReconcileBackend + 'static>(
             "IPC read timed out",
         ))
     })??;
-    let response = tokio::task::spawn_blocking(move || {
+    let (response, should_shutdown) = tokio::task::spawn_blocking(move || {
         supervisor
             .lock()
             .map_err(|_| WireError::Io(io::Error::other("supervisor lock poisoned")))
-            .map(|mut guard| guard.handle(request))
+            .map(|mut guard| {
+                let response = guard.handle(request);
+                (response, guard.shutdown_requested)
+            })
     })
     .await
     .map_err(|error| WireError::Io(io::Error::other(error.to_string())))??;
-    write_response(&mut writer, &response).await
+    write_response(&mut writer, &response).await?;
+    Ok(should_shutdown)
 }
 
 fn summarize_devices(devices: &[UsbDevice], selected: &UsbIdentity) -> Vec<DeviceSummary> {
@@ -873,14 +1140,26 @@ fn initial_status(state: &PersistedState) -> AgentStatus {
             usb: connecting("Initial observation pending"),
             cups: connecting("Initial observation pending"),
             windows_queue: connecting("Initial observation pending"),
+            lan: connecting("Initial observation pending"),
         },
         startup: StartupStatus {
             registered: false,
             task_name: TASK_NAME.into(),
             logoff_behavior:
-                "interactive per-user agent terminates at logoff; printing resumes after next logon"
-                    .into(),
+                "On-demand mode: no login task; explicit Exit stops sharing and the VM.".into(),
         },
+        lan: inactive_lan_status(),
+    }
+}
+
+fn inactive_lan_status() -> WireLanStatus {
+    WireLanStatus {
+        enabled: false,
+        interface_alias: None,
+        network_category: None,
+        address: None,
+        endpoint: None,
+        service_instance: None,
     }
 }
 
@@ -950,6 +1229,7 @@ fn components_unhealthy(components: &AgentComponents) -> bool {
         components.usb.state,
         components.cups.state,
         components.windows_queue.state,
+        components.lan.state,
     ]
     .iter()
     .any(|state| {
@@ -973,6 +1253,7 @@ fn overall(desired: DesiredState, components: &AgentComponents) -> &'static str 
         components.usb.state,
         components.cups.state,
         components.windows_queue.state,
+        components.lan.state,
     ];
     if states
         .iter()
@@ -1059,6 +1340,35 @@ fn hex_id(value: &str, key: &str) -> Result<u16, BridgeError> {
     u16::from_str_radix(digits, 16).map_err(|_| config_error(format!("{key} is invalid")))
 }
 
+fn validate_lan_subnet(value: &str) -> Result<(), BridgeError> {
+    let (address, prefix) = value
+        .split_once('/')
+        .ok_or_else(|| config_error("lan_subnet must be canonical IPv4 CIDR"))?;
+    let address = address
+        .parse::<Ipv4Addr>()
+        .map_err(|_| config_error("lan_subnet address is invalid"))?;
+    let prefix = prefix
+        .parse::<u8>()
+        .map_err(|_| config_error("lan_subnet prefix is invalid"))?;
+    if !(8..=30).contains(&prefix)
+        || address.is_unspecified()
+        || address.is_loopback()
+        || address.is_link_local()
+        || address.is_multicast()
+    {
+        return Err(config_error(
+            "lan_subnet is not a supported local IPv4 CIDR",
+        ));
+    }
+    let mask = u32::MAX << (32 - u32::from(prefix));
+    if u32::from(address) & mask != u32::from(address) {
+        return Err(config_error(
+            "lan_subnet must use the canonical network address",
+        ));
+    }
+    Ok(())
+}
+
 fn config_error(detail: impl Into<String>) -> BridgeError {
     BridgeError::PermissionDenied {
         operation: format!("reading M6 configuration: {}", detail.into()),
@@ -1121,15 +1431,17 @@ guest_queue=PrintBridge_DCP_L2600D\n";
                         usb: stopped("stopped"),
                         cups: stopped("stopped"),
                         windows_queue: ready("ok"),
+                        lan: stopped("stopped"),
                     }
                 } else {
                     self.components.clone()
                 },
                 startup: StartupStatus {
-                    registered: true,
+                    registered: false,
                     task_name: TASK_NAME.into(),
                     logoff_behavior: "test".into(),
                 },
+                lan: inactive_lan_status(),
             }
         }
 
@@ -1190,6 +1502,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
                 usb: ready("ok"),
                 cups: ready("ok"),
                 windows_queue: ready("ok"),
+                lan: ready("ok"),
             },
         };
         let supervisor = Supervisor::new(
@@ -1198,6 +1511,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
             root.join("agent.jsonl"),
             "test-pipe".into(),
             backend,
+            false,
         )
         .expect("supervisor");
         (supervisor, calls, root)
@@ -1212,10 +1526,52 @@ guest_queue=PrintBridge_DCP_L2600D\n";
     }
 
     #[test]
+    fn lan_approval_requires_a_paired_alias_and_canonical_subnet() {
+        let config = M6Config::parse(&format!(
+            "{CONFIG}lan_interface_alias=Ethernet 3\nlan_subnet=192.168.100.0/24\n"
+        ))
+        .expect("approved LAN");
+        assert_eq!(
+            config.approved_lan,
+            Some(ApprovedLan {
+                interface_alias: "Ethernet 3".into(),
+                subnet: "192.168.100.0/24".into(),
+            })
+        );
+        assert!(M6Config::parse(&format!("{CONFIG}lan_interface_alias=Ethernet 3\n")).is_err());
+        assert!(
+            M6Config::parse(&format!(
+                "{CONFIG}lan_interface_alias=Ethernet 3\nlan_subnet=192.168.100.72/24\n"
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
     fn desired_state_is_persisted_as_immutable_generations() {
         let (mut supervisor, _, root) = supervisor();
-        let response = supervisor.handle(RequestEnvelope::new("stop-1", Command::Stop));
+        let response = supervisor.handle(RequestEnvelope::new("start-1", Command::Start));
         assert!(matches!(response.result, CommandResult::Ok { .. }));
+        assert!(root.join("state/state-00000000000000000000.json").is_file());
+        assert!(root.join("state/state-00000000000000000001.json").is_file());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn configuration_change_creates_a_new_stopped_generation() {
+        let root = temporary_directory();
+        let store = StateStore::new(root.join("state")).expect("store");
+        let old_config = M6Config::parse(CONFIG).expect("old config");
+        let old_state = store.load(&old_config).expect("old state");
+        assert_eq!(old_state.revision, 0);
+
+        let new_config = M6Config::parse(&format!(
+            "{CONFIG}lan_interface_alias=Ethernet 3\nlan_subnet=192.168.100.0/24\n"
+        ))
+        .expect("new config");
+        let new_state = store.load(&new_config).expect("migrated state");
+        assert_eq!(new_state.revision, 1);
+        assert_eq!(new_state.desired, DesiredState::Stopped);
         assert!(root.join("state/state-00000000000000000000.json").is_file());
         assert!(root.join("state/state-00000000000000000001.json").is_file());
         fs::remove_dir_all(root).expect("cleanup");
@@ -1243,12 +1599,39 @@ guest_queue=PrintBridge_DCP_L2600D\n";
     #[test]
     fn backoff_is_bounded_and_status_is_truthful() {
         let (mut supervisor, _, root) = supervisor();
+        supervisor
+            .set_desired(DesiredState::Running)
+            .expect("start");
         supervisor.backend.components.usb = waiting("unplugged");
         for _ in 0..20 {
             supervisor.reconcile(false);
         }
         assert_eq!(supervisor.status.overall, "waiting_for_usb");
         assert!(supervisor.status.retry_after_ms <= Some(MAX_BACKOFF.as_millis() as u64));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn shutdown_stops_desired_state_and_requests_process_exit() {
+        let (mut supervisor, _, root) = supervisor();
+        let _ = supervisor.handle(RequestEnvelope::new("start", Command::Start));
+        let response = supervisor.handle(RequestEnvelope::new("shutdown", Command::Shutdown));
+        assert!(matches!(response.result, CommandResult::Ok { .. }));
+        assert!(supervisor.shutdown_requested);
+        assert_eq!(supervisor.state.desired, DesiredState::Stopped);
+        assert_eq!(supervisor.status.overall, "stopped");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn completed_start_refreshes_an_expired_desktop_lease() {
+        let (mut supervisor, _, root) = supervisor();
+        supervisor.on_demand = true;
+        supervisor.last_heartbeat = Instant::now() - DESKTOP_LEASE;
+        let response = supervisor.handle(RequestEnvelope::new("start-lease", Command::Start));
+        assert!(matches!(response.result, CommandResult::Ok { .. }));
+        supervisor.tick();
+        assert!(!supervisor.shutdown_requested);
         fs::remove_dir_all(root).expect("cleanup");
     }
 }
