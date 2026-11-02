@@ -1,7 +1,12 @@
 {
-  "name": "printbridge-desktop-ui",
+  "name": "quirewire-desktop-ui",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "description": "On-demand local-network printing and scanning for a USB multifunction device",
+  "engines": {
+    "node": ">=24.15.0"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --port 1420",

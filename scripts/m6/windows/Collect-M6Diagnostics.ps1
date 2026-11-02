@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$CliExecutable = (Join-Path $PSScriptRoot '..\..\..\target\debug\printbridgectl.exe'),
+    [string]$CliExecutable = (Join-Path $PSScriptRoot '..\..\..\target\debug\quirewirectl.exe'),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\..\..\artifacts\m6\diagnostics')
 )
 
@@ -11,22 +11,22 @@ $destination = Join-Path $OutputDirectory "$timestamp-m6-diagnostics.json"
 
 $cliOutput = @(& $CliExecutable diagnostics 2>&1 | ForEach-Object { $_.ToString() })
 $cliExit = $LASTEXITCODE
-$task = Get-ScheduledTask -TaskPath '\PrintBridge\' -TaskName 'Agent' -ErrorAction SilentlyContinue
-$taskInfo = if ($task) { Get-ScheduledTaskInfo -TaskPath '\PrintBridge\' -TaskName 'Agent' } else { $null }
-$processes = @(Get-Process -Name 'printbridge-agent' -ErrorAction SilentlyContinue | ForEach-Object {
+$task = Get-ScheduledTask -TaskPath '\QuireWire\' -TaskName 'Agent' -ErrorAction SilentlyContinue
+$taskInfo = if ($task) { Get-ScheduledTaskInfo -TaskPath '\QuireWire\' -TaskName 'Agent' } else { $null }
+$processes = @(Get-Process -Name 'quirewire-agent' -ErrorAction SilentlyContinue | ForEach-Object {
     [ordered]@{ id = $_.Id; start_time_utc = $_.StartTime.ToUniversalTime().ToString('o'); working_set_bytes = $_.WorkingSet64 }
 })
-$queue = Get-Printer -Name 'Brother via PrintBridge' -Full -ErrorAction SilentlyContinue
+$queue = Get-Printer -Name 'Brother via QuireWire' -Full -ErrorAction SilentlyContinue
 
 $record = [ordered]@{
-    schema = 'printbridge.m6.diagnostics.v1'
+    schema = 'quirewire.m6.diagnostics.v1'
     generated_at_utc = (Get-Date).ToUniversalTime().ToString('o')
     cli_exit_code = $cliExit
     agent_diagnostics = ($cliOutput -join "`n")
     agent_processes = $processes
     startup_task = if ($task) {
         [ordered]@{
-            path = '\PrintBridge\Agent'
+            path = '\QuireWire\Agent'
             state = $task.State.ToString()
             principal_user_id = $task.Principal.UserId
             logon_type = $task.Principal.LogonType.ToString()

@@ -31,13 +31,13 @@ if ($UnsignedDevelopmentBuild -and -not [string]::IsNullOrWhiteSpace($Certificat
 
 Push-Location $repositoryRoot
 try {
-    & cargo.exe build --locked --release -p printbridge-agent -p printbridgectl
+    & cargo.exe build --locked --release -p quirewire-agent -p quirewirectl
     if ($LASTEXITCODE -ne 0) { throw 'Release agent/CLI build failed.' }
 }
 finally { Pop-Location }
 
-$agent = Join-Path $releaseRoot 'printbridge-agent.exe'
-$cli = Join-Path $releaseRoot 'printbridgectl.exe'
+$agent = Join-Path $releaseRoot 'quirewire-agent.exe'
+$cli = Join-Path $releaseRoot 'quirewirectl.exe'
 foreach ($binary in @($agent, $cli)) {
     if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) { throw "Missing release binary: $binary" }
 }
@@ -90,7 +90,7 @@ if ($CertificateThumbprint -and $signature.Status -ne 'Valid') {
 }
 
 [pscustomobject]@{
-    schema = 'printbridge.m8.build-result.v1'
+    schema = 'quirewire.m8.build-result.v1'
     installer = $installer.FullName
     bytes = $installer.Length
     sha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -25,7 +25,7 @@ finally {
 }
 $after = Get-Service -Name Spooler
 $record = [ordered]@{
-    schema = 'printbridge.m6.spooler-interruption.v1'
+    schema = 'quirewire.m6.spooler-interruption.v1'
     before_status = $before.Status.ToString()
     stopped_at_utc = $stoppedAt
     hold_seconds = $HoldSeconds

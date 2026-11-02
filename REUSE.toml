@@ -1,0 +1,10 @@
+version = 1
+
+[[annotations]]
+path = ["guest/patches/airsane-brscan5-session.patch"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = [
+  "AirSane contributors",
+  "2026 Ivan Radev (QuireWire compatibility modification)",
+]
+SPDX-License-Identifier = "GPL-3.0-only"

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, ComponentState, ComponentStatus, DependencyInfo, DiagnosticEntry, GuestPrinting,
     Hypervisor, JobId, JobState, OwnedVm, OwnershipMarker, PrintJob, PrintQueue, PrinterEndpoint,
     Startup, StartupRegistration, UsbAccess, UsbDevice, UsbIdentity, VmId, WindowsPrintSubmission,
@@ -58,7 +58,7 @@ impl FakePlatform {
     pub fn ready() -> Self {
         let vm = OwnedVm {
             id: VmId::new("00000000-0000-0000-0000-000000000002"),
-            marker: OwnershipMarker::new("printbridge.m2.fake-owned-vm.v1"),
+            marker: OwnershipMarker::new("quirewire.m2.fake-owned-vm.v1"),
         };
         let selected_usb = UsbIdentity {
             vendor_id: 0x04f9,
@@ -85,7 +85,7 @@ impl FakePlatform {
                 driver: "Fake Linux driver".into(),
             }],
             owned_windows_queues: vec![PrintQueue {
-                name: "Brother via PrintBridge (fake)".into(),
+                name: "Brother via QuireWire (fake)".into(),
                 driver: "Microsoft IPP Class Driver".into(),
             }],
             jobs: Vec::new(),
@@ -122,7 +122,7 @@ impl FakePlatform {
             Ok(())
         } else {
             Err(BridgeError::PermissionDenied {
-                operation: "accessing a VM not proven to be PrintBridge-owned".into(),
+                operation: "accessing a VM not proven to be QuireWire-owned".into(),
                 action: "Select the persisted owned VM UUID and marker.".into(),
             })
         }
@@ -359,10 +359,10 @@ impl WindowsPrinting for FakePlatform {
                 action: "Use the configured fake endpoint.".into(),
             });
         }
-        if !name.starts_with("Brother via PrintBridge") {
+        if !name.starts_with("Brother via QuireWire") {
             return Err(BridgeError::PermissionDenied {
                 operation: "registering an unowned queue name".into(),
-                action: "Use the PrintBridge-owned name prefix.".into(),
+                action: "Use the QuireWire-owned name prefix.".into(),
             });
         }
         if let Some(existing) = self
@@ -479,7 +479,7 @@ impl Startup for FakePlatform {
         }
         Ok(StartupRegistration {
             enabled: self.startup_enabled,
-            owner: "printbridge.m2.fake".into(),
+            owner: "quirewire.m2.fake".into(),
         })
     }
 }
@@ -490,7 +490,7 @@ const fn ready_status() -> ComponentStatus {
 
 #[cfg(test)]
 mod tests {
-    use printbridge_domain::{GuestPrinting, JobState};
+    use quirewire_domain::{GuestPrinting, JobState};
 
     use super::FakePlatform;
 

@@ -1,6 +1,6 @@
 //! Versioned agent protocol shared by every non-UI client.
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeStatus, ComponentStatus, DoctorReport, UsbDevice, WindowsPrintSubmission,
     WindowsQueueStatus,
 };

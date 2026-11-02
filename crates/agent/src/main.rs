@@ -11,10 +11,10 @@ async fn main() {
         [command, flag, path, mode]
             if command == "run" && flag == "--config" && mode == "--on-demand" =>
         {
-            printbridge_agent::m6::run_agent(PathBuf::from(path), true).await
+            quirewire_agent::m6::run_agent(PathBuf::from(path), true).await
         }
         [command, flag, path] if command == "run" && flag == "--config" => {
-            printbridge_agent::m6::run_agent(PathBuf::from(path), false).await
+            quirewire_agent::m6::run_agent(PathBuf::from(path), false).await
         }
         [command, address, port, flag, output]
             if command == "diagnose-lan" && flag == "--output" =>
@@ -28,14 +28,14 @@ async fn main() {
         }
         [command] if command == "help" || command == "--help" || command == "-h" => {
             println!(
-                "PrintBridge on-demand agent\nUsage:\n  printbridge-agent run --config <m6.conf> [--on-demand]\n  printbridge-agent diagnose-lan <IPv4> <port> --output <path>\n  printbridge-agent diagnose-scan <IPv4> <port> --output <path>"
+                "QuireWire on-demand agent\nUsage:\n  quirewire-agent run --config <m6.conf> [--on-demand]\n  quirewire-agent diagnose-lan <IPv4> <port> --output <path>\n  quirewire-agent diagnose-scan <IPv4> <port> --output <path>"
             );
             Ok(())
         }
-        _ => Err("Usage: printbridge-agent run --config <m6.conf> [--on-demand] | diagnose-lan <IPv4> <port> --output <path> | diagnose-scan <IPv4> <port> --output <path>".into()),
+        _ => Err("Usage: quirewire-agent run --config <m6.conf> [--on-demand] | diagnose-lan <IPv4> <port> --output <path> | diagnose-scan <IPv4> <port> --output <path>".into()),
     };
     if let Err(error) = result {
-        eprintln!("printbridge-agent: {error}");
+        eprintln!("quirewire-agent: {error}");
         std::process::exit(1);
     }
 }
@@ -47,8 +47,8 @@ fn diagnose_scan(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let address = address.parse::<Ipv4Addr>()?;
     let port = port.parse::<u16>()?;
-    let result = printbridge_provider_lan::browse_live_scan_advertisement(
-        "Brother via PrintBridge Scanner",
+    let result = quirewire_provider_lan::browse_live_scan_advertisement(
+        "Brother via QuireWire Scanner",
         address,
         port,
         Duration::from_secs(15),
@@ -68,8 +68,8 @@ fn diagnose_scan(
 fn diagnose_lan(address: &str, port: &str, output: &str) -> Result<(), Box<dyn std::error::Error>> {
     let address = address.parse::<Ipv4Addr>()?;
     let port = port.parse::<u16>()?;
-    let result = printbridge_provider_lan::browse_live_advertisement(
-        "Brother via PrintBridge",
+    let result = quirewire_provider_lan::browse_live_advertisement(
+        "Brother via QuireWire",
         address,
         port,
         Duration::from_secs(15),

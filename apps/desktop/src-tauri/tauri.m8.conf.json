@@ -3,12 +3,12 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "PrintBridge Project",
+    "publisher": "QuireWire Project",
     "shortDescription": "Local USB print and scan bridge",
-    "longDescription": "PrintBridge connects an owner-selected USB multifunction device to driverless IPP printing and eSCL scanning through a private Linux guest.",
+    "longDescription": "QuireWire connects an owner-selected USB multifunction device to driverless IPP printing and eSCL scanning through a private Linux guest.",
     "resources": {
-      "../../../target/release/printbridge-agent.exe": "bin/printbridge-agent.exe",
-      "../../../target/release/printbridgectl.exe": "bin/printbridgectl.exe",
+      "../../../target/release/quirewire-agent.exe": "bin/quirewire-agent.exe",
+      "../../../target/release/quirewirectl.exe": "bin/quirewirectl.exe",
       "../../../scripts/m5/windows/Invoke-M5WindowsPrinting.ps1": "scripts/m5/windows/Invoke-M5WindowsPrinting.ps1",
       "../../../scripts/m6/windows/Invoke-M6Startup.ps1": "scripts/m6/windows/Invoke-M6Startup.ps1",
       "../../../scripts/m6/windows/New-M6Configuration.ps1": "scripts/m6/windows/New-M6Configuration.ps1",
@@ -21,6 +21,12 @@
       "../../../scripts/m11/windows/Test-M11Escl.ps1": "scripts/m11/windows/Test-M11Escl.ps1",
       "../../../scripts/m11/windows/Set-M11ScanApproval.ps1": "scripts/m11/windows/Set-M11ScanApproval.ps1",
       "../../../guest/": "guest/",
+      "../../../LICENSE": "LICENSE",
+      "../../../LICENSE-APACHE": "LICENSE-APACHE",
+      "../../../LICENSE-MIT": "LICENSE-MIT",
+      "../../../LICENSES/GPL-3.0-only.txt": "LICENSES/GPL-3.0-only.txt",
+      "../../../NOTICE": "NOTICE",
+      "../../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
       "../../../docs/install.md": "docs/install.md",
       "../../../docs/licensing.md": "docs/licensing.md"
     },
@@ -31,7 +37,7 @@
       "nsis": {
         "installMode": "currentUser",
         "installerHooks": "./windows/hooks.nsh",
-        "startMenuFolder": "PrintBridge"
+        "startMenuFolder": "QuireWire"
       }
     }
   }

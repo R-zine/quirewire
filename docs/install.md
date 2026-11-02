@@ -1,8 +1,13 @@
 # Install, repair, upgrade, and uninstall
 
-PrintBridge supports Windows 11 x64 for one interactive user. The UI and
+QuireWire supports Windows 11 x64 for one interactive user. The UI and
 on-demand agent run at ordinary user privilege. The NSIS installer is
 `currentUser`; no always-elevated process or service is installed.
+
+There is not yet a supported signed public binary release. The repository
+builds an explicitly unsigned development installer for owner-local testing.
+That installer includes QuireWire source notices, but it does not include
+VirtualBox, Debian media, vendor drivers, or a configured appliance.
 
 ## Before setup
 
@@ -10,11 +15,11 @@ Run the packaged prerequisite report from PowerShell:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
-  "$env:LOCALAPPDATA\PrintBridge\scripts\m8\windows\Test-M8Prerequisites.ps1"
+  "$env:LOCALAPPDATA\QuireWire\scripts\m8\windows\Test-M8Prerequisites.ps1"
 ```
 
 Allow at least 12 GiB free disk space. The headless guest reserves 768 MiB RAM
-while running. PrintBridge captures the **whole selected USB device**, so Windows
+while running. QuireWire captures the **whole selected USB device**, so Windows
 cannot use that device while the guest owns it. Setup asks for explicit consent
 in the desktop. No login startup is enabled.
 
@@ -31,17 +36,17 @@ then run the M4 acceptance import. Create the protected agent configuration with
 the packaged `New-M6Configuration.ps1`; this validates the physical-acceptance
 state, live VM UUID plus extradata, exact USB serial, and loopback endpoint.
 
-Once `%LOCALAPPDATA%\PrintBridge\m6.conf` exists, run lifecycle repair from the
-installation directory and open PrintBridge. Windows shows one UAC consent
+Once `%LOCALAPPDATA%\QuireWire\m6.conf` exists, run lifecycle repair from the
+installation directory and open QuireWire. Windows shows one UAC consent
 prompt if the exact owned IPP queue or approved-interface/subnet firewall rules must
 be created; the on-demand desktop and agent remain non-elevated:
 
 ```powershell
-$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
+$root = Join-Path $env:LOCALAPPDATA 'QuireWire'
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   "$root\scripts\m8\windows\Invoke-M8Lifecycle.ps1" `
   -Action Repair -InstallRoot $root
-& "$root\printbridge-desktop.exe"
+& "$root\quirewire-desktop.exe"
 ```
 
 In Setup, discover USB devices, select only the recorded printer, read the whole
@@ -53,7 +58,7 @@ the owner explicitly approves one current interface alias and its directly
 attached local IPv4 subnet. For the reference host:
 
 ```powershell
-$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
+$root = Join-Path $env:LOCALAPPDATA 'QuireWire'
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   "$root\scripts\m10\windows\Set-M10LanApproval.ps1" `
   -Action Approve -ConfigPath "$root\m6.conf" `
@@ -69,7 +74,7 @@ LAN scanning requires a second, separate approval because it permits devices on
 the trusted subnet to acquire documents. After LAN printing is approved:
 
 ```powershell
-$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
+$root = Join-Path $env:LOCALAPPDATA 'QuireWire'
 & "$root\scripts\m11\windows\Set-M11ScanApproval.ps1" `
   -Action Approve -ConfigPath "$root\m6.conf"
 & "$root\scripts\m8\windows\Invoke-M8Lifecycle.ps1" `
@@ -79,10 +84,10 @@ $root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
 This adds only the configured TCP 8645 rule to the same exact interface/subnet.
 Use `-Action Remove` and Repair to withdraw scan access while preserving print.
 
-## Existing M6/M7 installation or upgrade
+## Upgrading a QuireWire installation
 
 The installer detects the protected M6 configuration, validates and removes the
-exact old PrintBridge login task, stops only that executable, preserves the
+exact earlier QuireWire login task, stops only that executable, preserves the
 configuration, installs new binaries, and leaves the agent/VM stopped until the
 desktop is opened. Re-running the same installer is an idempotent repair.
 
@@ -91,6 +96,20 @@ manifest, queue, config, or VM identity mismatch rather than guessing ownership.
 It requests one-time elevation only for the owned queue and exact scoped
 firewall rules; healthy marker-owned resources are verified without broad
 mutation.
+
+### Pre-rebrand development installations
+
+The first QuireWire revision intentionally changes package names, executable
+names, data paths, queue names, IPC identifiers and ownership markers together.
+Do not point it at a pre-rebrand VM or data directory: the ownership checks are
+expected to refuse those resources instead of guessing that they are safe.
+
+Exit and uninstall the earlier development build, build/import a fresh
+QuireWire appliance from the current source, repeat its physical acceptance,
+and create a new protected configuration. The earlier migrated appliance is
+preserved rather than silently deleted; remove it manually only after verifying
+its exact UUID and deciding that it is no longer needed. There is no automatic
+cross-brand migration in this revision.
 
 ## Unsigned development build
 
@@ -105,11 +124,11 @@ Production builds must use the documented certificate-thumbprint path.
 
 ## Uninstall safety
 
-Use Windows **Installed apps → PrintBridge → Uninstall**. Before NSIS removes
+Use Windows **Installed apps → QuireWire → Uninstall**. Before NSIS removes
 files, the lifecycle hook:
 
 1. verifies the M8 manifest SID and exact install/data roots;
-2. disables only `\PrintBridge\Agent` after validating its description, SID,
+2. disables only `\QuireWire\Agent` after validating its description, SID,
    executable, and arguments;
 3. stops only the manifest-recorded agent executable;
 4. removes only the Windows queue matching the marker file, live comment, port,

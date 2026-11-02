@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use printbridge_domain::{ComponentState, GuestPrinting, PrinterEndpoint};
-use printbridge_provider_cups::CupsIppProvider;
+use quirewire_domain::{ComponentState, GuestPrinting, PrinterEndpoint};
+use quirewire_provider_cups::CupsIppProvider;
 
 fn main() {
     if let Err(error) = run() {

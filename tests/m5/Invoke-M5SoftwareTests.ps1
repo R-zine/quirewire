@@ -10,7 +10,8 @@ $collector = Join-Path $repo 'scripts\m5\windows\Collect-M5Diagnostics.ps1'
 $recorder = Join-Path $repo 'scripts\m5\windows\Record-M5Acceptance.ps1'
 $generator = Join-Path $repo 'scripts\m5\windows\New-M5TestDocuments.ps1'
 $config = Join-Path $repo 'scripts\m5\m5.conf'
-$artifacts = Join-Path $repo 'artifacts\m5\software-tests'
+$runId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [Guid]::NewGuid().ToString('N')
+$artifacts = Join-Path $repo (Join-Path 'artifacts\m5\software-tests' $runId)
 $null = New-Item -ItemType Directory -Force -Path $artifacts
 $checks = [Collections.Generic.List[string]]::new()
 
@@ -43,19 +44,19 @@ $before = @(Get-Printer | Sort-Object Name | ForEach-Object { "$($_.Name)|$($_.D
 $defaultBefore = @(Get-CimInstance Win32_Printer | Where-Object Default | ForEach-Object Name)
 $state = Join-Path $artifacts 'read-only-state.json'
 $detect = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
-    -File $provider -Action Detect -PrinterName 'Brother via PrintBridge' `
-    -IppUrl 'http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D' -StatePath $state)
+    -File $provider -Action Detect -PrinterName 'Brother via QuireWire' `
+    -IppUrl 'http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D' -StatePath $state)
 Assert-True ($LASTEXITCODE -eq 0) 'real PrintManagement detection succeeds'
-Assert-True ($detect[0] -eq 'PRINTBRIDGE_WINDOWS_V1') 'provider emits the versioned protocol header'
+Assert-True ($detect[0] -eq 'QUIREWIRE_WINDOWS_V1') 'provider emits the versioned protocol header'
 Assert-True ($detect -contains 'ipp_url_supported=true') 'installed Add-Printer exposes IppURL'
 
 $invalid = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
-    -File $provider -Action Status -PrinterName 'Brother via PrintBridge' `
+    -File $provider -Action Status -PrinterName 'Brother via QuireWire' `
     -IppUrl 'http://192.0.2.10:631/printers/unsafe' -StatePath $state)
 Assert-True ($LASTEXITCODE -ne 0) 'non-loopback endpoint is rejected'
 Assert-True ($invalid -contains 'error_code=invalid_argument') 'unsafe endpoint returns a typed error'
 
-$absentName = 'Brother via PrintBridge SoftwareTest_' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff')
+$absentName = 'Brother via QuireWire SoftwareTest_' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfff')
 $absentState = Join-Path $artifacts 'absent-owner.json'
 $remove = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
     -File $provider -Action Remove -PrinterName $absentName `
@@ -65,10 +66,10 @@ Assert-True ($remove -contains 'queue_found=false') 'absent removal reports no q
 
 Push-Location $repo
 try {
-    $help = @(cargo run -q -p printbridgectl -- help)
+    $help = @(cargo run -q -p quirewirectl -- help)
     Assert-True ($LASTEXITCODE -eq 0) 'CLI help runs'
     Assert-True (($help -join "`n").Contains('printer test-page')) 'CLI documents all M5 printer commands'
-    $status = @(cargo run -q -p printbridgectl -- --config $config printer status)
+    $status = @(cargo run -q -p quirewirectl -- --config $config printer status)
     Assert-True ($LASTEXITCODE -eq 0) 'CLI read-only printer status runs'
     Assert-True (($status -join "`n").Contains('physical_output: not_inferred')) 'CLI does not infer physical output'
 }
@@ -84,9 +85,9 @@ $documents = Join-Path $artifacts 'documents'
 $text = Get-Content -LiteralPath (Join-Path $documents 'm5-standard-app-text.txt') -Raw
 $pdfBytes = [IO.File]::ReadAllBytes((Join-Path $documents 'm5-standard-app-pdf.pdf'))
 $pdfText = [Text.Encoding]::ASCII.GetString($pdfBytes)
-Assert-True ($text.Contains('PRINTBRIDGE-M5-TEXT-2026')) 'text fixture contains its physical token'
+Assert-True ($text.Contains('QUIREWIRE-M5-TEXT-2026')) 'text fixture contains its physical token'
 Assert-True ($pdfText.StartsWith('%PDF-1.4')) 'PDF fixture has a valid PDF header'
-Assert-True ($pdfText.Contains('PRINTBRIDGE-M5-PDF-IMAGE-2026')) 'PDF fixture contains its physical token'
+Assert-True ($pdfText.Contains('QUIREWIRE-M5-PDF-IMAGE-2026')) 'PDF fixture contains its physical token'
 
 $acceptance = Join-Path $artifacts 'acceptance-negative'
 & $recorder -InstallIdempotent 'NOT TESTED' -DriverVerified 'NOT TESTED' `

@@ -3,13 +3,13 @@
 This directory builds the minimal, headless Debian appliance required by M4. The
 build has two deliberate layers:
 
-1. `printbridge-m4-base.ova` contains Debian, CUPS, IPP tools, loopback-key SSH,
+1. `quirewire-m4-base.ova` contains Debian, CUPS, IPP tools, loopback-key SSH,
    log rotation, and health scripts. It contains no Brother package.
-2. `printbridge-m4-dcpl2600d.owner-local.ova` is produced locally after applying
+2. `quirewire-m4-dcpl2600d.owner-local.ova` is produced locally after applying
    an owner-selected driver medium. It must not be redistributed until the
    Brother package licence has been reviewed.
 
-The queue name is intentionally fixed as `PrintBridge_DCP_L2600D`. The guest has
+The queue name is intentionally fixed as `QuireWire_DCP_L2600D`. The guest has
 one NAT NIC, no GUI, no password login, no sudo grant, and no CUPS remote admin.
 The minimal base includes pinned D-Bus solely for systemd service health and
 repair access from the unprivileged account.
@@ -41,7 +41,7 @@ the Brother packages yourself, and create an installation-only SSH key:
 
 ```powershell
 New-Item -ItemType Directory -Force .\artifacts\m4\ssh | Out-Null
-ssh-keygen.exe -t ed25519 -N "" -C printbridge-m4-owner `
+ssh-keygen.exe -t ed25519 -N "" -C quirewire-m4-owner `
   -f .\artifacts\m4\ssh\id_ed25519
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
@@ -91,13 +91,13 @@ physical page:
 
 ```powershell
 .\guest\windows\Invoke-M4Acceptance.ps1 `
-  -ConfiguredOvaPath <build>\printbridge-m4-dcpl2600d.owner-local.ova `
-  -DriverMediaPath <build>\printbridge-m4-owner-driver.viso `
+  -ConfiguredOvaPath <build>\quirewire-m4-dcpl2600d.owner-local.ova `
+  -DriverMediaPath <build>\quirewire-m4-owner-driver.viso `
   -SshPrivateKeyPath .\artifacts\m4\ssh\id_ed25519 `
   -SubmitPhysicalPage
 ```
 
-`printbridge-health --diagnostics` reports CUPS, queue, IPP, USB, driver mode,
+`quirewire-health --diagnostics` reports CUPS, queue, IPP, USB, driver mode,
 jobs, bounded logs, and explicitly `physical_output=not_inferred`. It redacts
 USB serial query parameters. M4 passes only after the owner confirms the paper
 contains the token recorded in the ignored acceptance state.

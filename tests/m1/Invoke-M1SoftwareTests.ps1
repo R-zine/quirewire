@@ -58,7 +58,7 @@ try {
     Assert-Test -Condition ($managerSource -match 'Set-Printer\s+-Name\s+\$PrinterName\s+-Comment\s+\$OwnedComment') -Name 'M1 ownership comment reapplied' -Detail 'IPP metadata cannot silently replace the cleanup ownership marker'
     Assert-Test -Condition ($managerSource -match 'restricted to a loopback host') -Name 'M1 registration is loopback-only' -Detail 'LAN IPP endpoints are rejected'
 
-    $dryRunName = "PrintBridge M1 Dry Run $([guid]::NewGuid().ToString('N'))"
+    $dryRunName = "QuireWire M1 Dry Run $([guid]::NewGuid().ToString('N'))"
     $dryRunEvidence = Join-Path $testOutput 'manage-dry-run'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\m1\windows\Manage-M1IppPrinter.ps1' `
         -Action Register -PrinterName $dryRunName `
@@ -73,10 +73,10 @@ try {
     Assert-Test -Condition ($guestSource -notmatch '(?m)^\s*(sudo\s+)?(lpadmin|cupsctl\s+--|systemctl\s+(start|stop|restart|enable|disable)|apt|dpkg\s+-i)\b') -Name 'Guest collector is read-only' -Detail 'No provisioning or service mutation commands are present'
 
     $fixtureExpectations = [ordered]@{
-        'm1-windows-text-test.txt' = 'PRINTBRIDGE-M1-WINDOWS-TEXT-2026'
-        'm1-clean-boot-text-test.txt' = 'PRINTBRIDGE-M1-CLEAN-BOOT-2026'
-        'm1-usb-reconnect-text-test.txt' = 'PRINTBRIDGE-M1-USB-RECONNECT-2026'
-        'm1-host-reboot-text-test.txt' = 'PRINTBRIDGE-M1-HOST-REBOOT-2026'
+        'm1-windows-text-test.txt' = 'QUIREWIRE-M1-WINDOWS-TEXT-2026'
+        'm1-clean-boot-text-test.txt' = 'QUIREWIRE-M1-CLEAN-BOOT-2026'
+        'm1-usb-reconnect-text-test.txt' = 'QUIREWIRE-M1-USB-RECONNECT-2026'
+        'm1-host-reboot-text-test.txt' = 'QUIREWIRE-M1-HOST-REBOOT-2026'
     }
     foreach ($entry in $fixtureExpectations.GetEnumerator()) {
         $path = Join-Path 'scripts\m1\test-data' $entry.Key
@@ -121,7 +121,7 @@ try {
     Assert-Test -Condition (Test-Path -LiteralPath 'docs\milestones\M01.md') -Name 'M1 milestone report exists' -Detail 'docs/milestones/M01.md'
 
     $report = [ordered]@{
-        schema = 'printbridge.m1.software-tests.v1'
+        schema = 'quirewire.m1.software-tests.v1'
         completedUtc = [DateTime]::UtcNow.ToString('o')
         result = 'PASS: SOFTWARE ONLY'
         physicalAcceptance = 'NOT INFERRED'

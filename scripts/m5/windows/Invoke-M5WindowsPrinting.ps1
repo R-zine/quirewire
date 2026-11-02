@@ -24,8 +24,8 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $ExpectedDriver = 'Microsoft IPP Class Driver'
-$OwnedSchema = 'printbridge.m5.owned-printer.v1'
-$ProtocolHeader = 'PRINTBRIDGE_WINDOWS_V1'
+$OwnedSchema = 'quirewire.m5.owned-printer.v1'
+$ProtocolHeader = 'QUIREWIRE_WINDOWS_V1'
 
 function ConvertTo-ProtocolText {
     param([AllowNull()][object]$Value)
@@ -82,7 +82,7 @@ function Throw-ProviderError {
     )
 
     $exception = [InvalidOperationException]::new($Message)
-    $exception.Data['PrintBridgeCode'] = $Code
+    $exception.Data['QuireWireCode'] = $Code
     if (-not [string]::IsNullOrWhiteSpace($ObservedDriver)) {
         $exception.Data['ObservedDriver'] = $ObservedDriver
     }
@@ -104,10 +104,10 @@ function Get-Capability {
 }
 
 function Get-ValidatedTarget {
-    if ($PrinterName -notmatch '^Brother via PrintBridge(?: [A-Za-z0-9._-]+)?$' -or
+    if ($PrinterName -notmatch '^Brother via QuireWire(?: [A-Za-z0-9._-]+)?$' -or
         $PrinterName.Contains("`r") -or $PrinterName.Contains("`n")) {
         Throw-ProviderError -Code 'invalid_argument' -Message `
-            'PrinterName must be the configured Brother via PrintBridge owned name.'
+            'PrinterName must be the configured Brother via QuireWire owned name.'
     }
     $uri = $null
     if (-not [Uri]::TryCreate($IppUrl, [UriKind]::Absolute, [ref]$uri)) {
@@ -208,7 +208,7 @@ function Test-Endpoint {
         $client.EndConnect($pending)
     }
     catch {
-        if ($_.Exception.Data.Contains('PrintBridgeCode')) { throw }
+        if ($_.Exception.Data.Contains('QuireWireCode')) { throw }
         Throw-ProviderError -Code 'endpoint_unreachable' -Message `
             "The loopback IPP endpoint on port $port is unreachable. Start the owned appliance and retry."
     }
@@ -273,7 +273,7 @@ try {
     $spooler = Get-Service -Name Spooler -ErrorAction Stop
     if ($spooler.Status -ne [ServiceProcess.ServiceControllerStatus]::Running) {
         Throw-ProviderError -Code 'spooler_not_running' -Message `
-            'Start the Windows Print Spooler, then retry. PrintBridge does not silently change its startup policy.'
+            'Start the Windows Print Spooler, then retry. QuireWire does not silently change its startup policy.'
     }
 
     if ($Action -eq 'Install') {
@@ -295,7 +295,7 @@ try {
         Test-Endpoint -Uri $uri
         $defaultBefore = Get-DefaultPrinterName
         $token = [Guid]::NewGuid().ToString('D')
-        $ownedComment = "PrintBridge M5 owned queue [$token]"
+        $ownedComment = "QuireWire M5 owned queue [$token]"
         $created = $null
         try {
             $null = Add-Printer -Name $PrinterName -IppURL $uri.AbsoluteUri -Comment $ownedComment -ErrorAction Stop
@@ -439,8 +439,8 @@ catch {
     $code = 'provider_failure'
     $observed = $null
     $failureMessage = $_.Exception.Message
-    if ($_.Exception.Data.Contains('PrintBridgeCode')) {
-        $code = [string]$_.Exception.Data['PrintBridgeCode']
+    if ($_.Exception.Data.Contains('QuireWireCode')) {
+        $code = [string]$_.Exception.Data['QuireWireCode']
     }
     elseif ($_.Exception -is [UnauthorizedAccessException] -or
         $_.Exception.Message -match '(?i)access (?:is )?denied') {

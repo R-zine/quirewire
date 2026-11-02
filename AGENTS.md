@@ -1,4 +1,4 @@
-# Codex agent instructions — PrintBridge
+# Codex agent instructions — QuireWire
 
 **Read `SPEC.md` in full before making changes.** It is the authoritative product/architecture/milestone specification.
 
@@ -11,7 +11,7 @@
 - Follow modularity rules: the background Rust agent runs without Tauri; desktop UI and CLI are clients of the same local IPC; providers encapsulate VirtualBox/CUPS/Windows APIs.
 - Start with the proven protocol path and minimal functionality. Never implement a custom Windows kernel print driver for v1.
 - Capture errors with actionable diagnostics, use tests for new functionality, and maintain safety/ownership guarantees before adding features.
-- Never remove existing unrelated Windows printers, VirtualBox VMs, or user data; keep destructive operations restricted to explicitly owned PrintBridge resources.
+- Never remove existing unrelated Windows printers, VirtualBox VMs, or user data; keep destructive operations restricted to explicitly owned QuireWire resources.
 - When unsure of installed CLI syntax or OS behavior, inspect/version-check instead of assuming; record the finding.
 - After a milestone, summarize changed files, commands/tests and results, blocked real-hardware checks, and next step. Do not claim to continue work asynchronously.
 - After every completed milestone, commit that milestone's reviewed changes and report the commit hash. Do not mix work from the next milestone into that commit.

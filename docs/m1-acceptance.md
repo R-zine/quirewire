@@ -9,7 +9,7 @@ a printed page without an explicit observation of the paper.
 
 | Resource | M1 value |
 |---|---|
-| Owned VM | `PrintBridge-M1-Debian13` |
+| Owned VM | `QuireWire-M1-Debian13` |
 | Owned VM UUID | `fd91fe56-f746-4884-9aa7-3b972882183a` |
 | VirtualBox | `7.2.22`, base package, zero Extension Packs |
 | Guest | Debian 13.7 x86_64 minimal, no desktop |
@@ -18,7 +18,7 @@ a printed page without an explicit observation of the paper.
 | Network | NAT; M1 host `127.0.0.1:8632` to guest TCP `631`; management `127.0.0.1:2222` to guest TCP `22` |
 | USB selector | Brother `04f9:0567` plus exact serial; serial intentionally omitted from committed files |
 | Guest queue | `DCPL2600D` |
-| Windows queue | `Brother via PrintBridge M1` |
+| Windows queue | `Brother via QuireWire M1` |
 | Required Windows driver | `Microsoft IPP Class Driver` |
 | IPP URL | `ipp://127.0.0.1:8632/printers/DCPL2600D` |
 
@@ -59,7 +59,7 @@ $Ssh = @(
   '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
   '-o', 'StrictHostKeyChecking=yes',
   '-o', "UserKnownHostsFile=$(Join-Path $M1 'ssh\known_hosts')",
-  'printbridge@127.0.0.1'
+  'quirewire@127.0.0.1'
 )
 ```
 
@@ -88,7 +88,7 @@ Get-Content .\scripts\m1\linux\collect-m1-guest-diagnostics.sh -Raw |
 
    ```powershell
    Test-NetConnection 127.0.0.1 -Port 8632
-   Get-Printer -Name 'Brother via PrintBridge M1' |
+   Get-Printer -Name 'Brother via QuireWire M1' |
      Format-List Name, DriverName, PrinterStatus, PortName, Comment
    ```
 
@@ -116,9 +116,9 @@ fixture and completed as `DCPL2600D-1`.
 2. Open `artifacts/m1/test-documents/m1-windows-pdf-image-test.pdf` in the normal
    PDF viewer. It is a local copy of the physically proven M0 image/PDF fixture.
 3. Print each from the application's ordinary Print UI to
-   `Brother via PrintBridge M1`.
+   `Brother via QuireWire M1`.
 4. Record the new CUPS job IDs with `& ssh.exe @Ssh 'lpstat -W all -o DCPL2600D'`.
-5. Confirm the text token `PRINTBRIDGE-M1-WINDOWS-TEXT-2026`, the PDF image, page
+5. Confirm the text token `QUIREWIRE-M1-WINDOWS-TEXT-2026`, the PDF image, page
    edges, and legibility on paper.
 
 - [x] Text page physically printed from Notepad.
@@ -136,7 +136,7 @@ fixture and completed as `DCPL2600D-1`.
    GUI frontend and the exact filter recaptured only `04f9:0567`.
 5. Open `scripts/m1/test-data/m1-clean-boot-text-test.txt` in Notepad and print it
    to the POC queue. Correlate the CUPS job and inspect the paper for token
-   `PRINTBRIDGE-M1-CLEAN-BOOT-2026`.
+   `QUIREWIRE-M1-CLEAN-BOOT-2026`.
 
 - [x] Clean ACPI shutdown completed.
 - [x] Clean headless start recovered SSH, CUPS, IPP, and USB.
@@ -157,7 +157,7 @@ fixture and completed as `DCPL2600D-1`.
 4. Confirm guest `lsusb`, CUPS idle/enabled, and loopback IPP reachability.
 5. Print `scripts/m1/test-data/m1-usb-reconnect-text-test.txt` from Notepad.
    Correlate the job and inspect the paper for token
-   `PRINTBRIDGE-M1-USB-RECONNECT-2026`.
+   `QUIREWIRE-M1-USB-RECONNECT-2026`.
 
 - [x] Owner explicitly confirmed the physical unplug/wait/reconnect sequence.
 - [x] Post-reconnect host and guest state verified automatic capture; no manual remediation occurred.
@@ -176,7 +176,7 @@ After Windows returns:
 3. Run `& $VBox startvm $Vm --type headless` and repeat the health checks from
    step 1. Record automatic versus manual USB capture.
 4. Print `scripts/m1/test-data/m1-host-reboot-text-test.txt` from Notepad and
-   inspect the paper for token `PRINTBRIDGE-M1-HOST-REBOOT-2026`.
+   inspect the paper for token `QUIREWIRE-M1-HOST-REBOOT-2026`.
 5. Collect both diagnostics reports and correlate the CUPS job.
 
 - [x] Windows host actually rebooted; date/time recorded.
@@ -197,7 +197,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   -CleanGuestBootPhysical PASS -UsbReconnectPhysical PASS -HostRebootPhysical PASS `
   -ExactUsbCapture PASS -HeadlessOperation PASS `
   -DriverName 'Microsoft IPP Class Driver' `
-  -QueueName 'Brother via PrintBridge M1' `
+  -QueueName 'Brother via QuireWire M1' `
   -JobEvidence 'Replace with every correlated real CUPS job ID and stage.' `
   -Notes 'Replace with observed capture/remediation and timings.' `
   -OwnerConfirmedPhysicalOutput

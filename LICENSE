@@ -1,0 +1,20 @@
+QuireWire licensing
+===================
+
+Copyright 2026 Ivan Radev
+
+Except where a file or directory says otherwise, the original QuireWire source
+code and documentation in this repository are available under either of these
+licenses, at your option:
+
+* Apache License, Version 2.0 (`LICENSE-APACHE`); or
+* MIT License (`LICENSE-MIT`).
+
+The AirSane compatibility patch at
+`guest/patches/airsane-brscan5-session.patch` contains and modifies material
+from AirSane. It is not covered by the QuireWire dual license. It is distributed
+under GPL-3.0-only; see `guest/patches/README.md` and
+`LICENSES/GPL-3.0-only.txt`.
+
+Dependencies and referenced third-party programs remain under their respective
+licenses. See `THIRD_PARTY_NOTICES.md` and `docs/licensing.md`.

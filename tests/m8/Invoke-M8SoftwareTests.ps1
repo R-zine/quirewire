@@ -75,7 +75,7 @@ Check 'offline Windows 11 WebView mode is explicit' {
     $config.bundle.windows.webviewInstallMode.type -eq 'skip' -and $prerequisites -match 'WebView2 Runtime is required'
 }
 Check 'agent CLI and fixed provider scripts are packaged' {
-    $configText -match 'printbridge-agent\.exe' -and $configText -match 'printbridgectl\.exe' -and
+    $configText -match 'quirewire-agent\.exe' -and $configText -match 'quirewirectl\.exe' -and
         $configText -match 'Invoke-M5WindowsPrinting\.ps1' -and $configText -match 'Invoke-M6Startup\.ps1'
 }
 Check 'VirtualBox and vendor binaries are not bundled' {
@@ -85,7 +85,7 @@ Check 'VirtualBox and vendor binaries are not bundled' {
         $configText -notmatch '(?i)\.ova"'
 }
 Check 'provider resolves installed resources before source fallback' {
-    $provider -match 'PRINTBRIDGE_RESOURCE_ROOT' -and $provider -match 'current_exe' -and
+    $provider -match 'QUIREWIRE_RESOURCE_ROOT' -and $provider -match 'current_exe' -and
         $provider -match 'ancestors\(\)\.take\(4\)'
 }
 Check 'release agent and background providers cannot flash consoles' {
@@ -109,7 +109,7 @@ Check 'installer lifecycle uses native PowerShell and native Program Files' {
 }
 Check 'hook aborts lifecycle failures' { $hooks -match 'Abort' -and $hooks -match 'No unowned printer' }
 Check 'manifest binds SID and exact roots' {
-    $lifecycle -match 'printbridge\.m8\.installation\.v1' -and
+    $lifecycle -match 'quirewire\.m8\.installation\.v1' -and
         $lifecycle -match 'manifest\.owner_sid -ne \$ownerSid' -and
         $lifecycle -match 'manifest\.install_root' -and $lifecycle -match 'manifest\.data_root'
 }
@@ -124,8 +124,8 @@ Check 'queue cleanup uses marker-owning provider only' {
 }
 Check 'VM deletion requires manifest disposition and live extradata' {
     $lifecycle -match "disposition -ne 'installation-owned'" -and
-        $lifecycle -match 'Get-VBoxExtraData \$Vm\.uuid ''PrintBridge/Schema''' -and
-        $lifecycle -match 'Get-VBoxExtraData \$Vm\.uuid ''PrintBridge/Owner''' -and
+        $lifecycle -match 'Get-VBoxExtraData \$Vm\.uuid ''QuireWire/Schema''' -and
+        $lifecycle -match 'Get-VBoxExtraData \$Vm\.uuid ''QuireWire/Owner''' -and
         $lifecycle -match '''unregistervm'', \$Vm\.uuid, ''--delete'''
 }
 Check 'recursive cleanup is bounded below DataRoot' {
@@ -152,7 +152,7 @@ Check 'resource and USB consent estimates are disclosed' {
         $prerequisites -match 'captures the entire selected USB device'
 }
 
-$fixture = Join-Path ([IO.Path]::GetTempPath()) ('printbridge-m8-tests-' + [Guid]::NewGuid().ToString('N'))
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('quirewire-m8-tests-' + [Guid]::NewGuid().ToString('N'))
 try {
     $install = Join-Path $fixture 'install'
     $data = Join-Path $fixture 'data'
@@ -162,7 +162,7 @@ try {
         -Action Status -InstallRoot $install -DataRoot $data
     $status = $statusText | ConvertFrom-Json
     Check 'unconfigured status is read-only and truthful' {
-        $status.schema -eq 'printbridge.m8.installation.v1' -and -not $status.installed -and
+        $status.schema -eq 'quirewire.m8.installation.v1' -and -not $status.installed -and
             -not $status.configured -and -not (Test-Path -LiteralPath (Join-Path $data 'installation.json'))
     }
 }

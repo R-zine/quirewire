@@ -20,12 +20,12 @@ if ($existingOwnedNames.Count -gt 0) {
     if (Test-Path -LiteralPath $manifestPath) {
         try {
             $existingManifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-            $existingManifestIsOwned = $existingManifest.schema -eq 'printbridge.m0.test-documents.v1'
+            $existingManifestIsOwned = $existingManifest.schema -eq 'quirewire.m0.test-documents.v1'
         }
         catch { $existingManifestIsOwned = $false }
     }
     if (-not $existingManifestIsOwned) {
-        throw "Output contains one or more target filenames without a valid PrintBridge ownership manifest: $($existingOwnedNames -join ', '). Refusing to overwrite."
+        throw "Output contains one or more target filenames without a valid QuireWire ownership manifest: $($existingOwnedNames -join ', '). Refusing to overwrite."
     }
 }
 
@@ -105,14 +105,14 @@ $content = @"
 BT
 /F1 20 Tf
 72 730 Td
-(PrintBridge M0 PDF/image test) Tj
+(QuireWire M0 PDF/image test) Tj
 /F1 11 Tf
 0 -24 Td
 (Required path: Windows app -> Microsoft IPP Class Driver -> CUPS -> USB printer) Tj
 0 -18 Td
 ($pageText) Tj
 0 -18 Td
-(Token: PRINTBRIDGE-M0-PDF-IMAGE-2026) Tj
+(Token: QUIREWIRE-M0-PDF-IMAGE-2026) Tj
 ET
 q
 180 0 0 180 72 430 cm
@@ -141,10 +141,10 @@ $frontContent = @"
 BT
 /F1 26 Tf
 72 725 Td
-(PrintBridge optional duplex test - FRONT / PAGE 1) Tj
+(QuireWire optional duplex test - FRONT / PAGE 1) Tj
 /F1 12 Tf
 0 -30 Td
-(Token: PRINTBRIDGE-M0-DUPLEX-FRONT-2026) Tj
+(Token: QUIREWIRE-M0-DUPLEX-FRONT-2026) Tj
 ET
 q
 220 0 0 220 72 420 cm
@@ -155,10 +155,10 @@ $backContent = @"
 BT
 /F1 26 Tf
 72 725 Td
-(PrintBridge optional duplex test - BACK / PAGE 2) Tj
+(QuireWire optional duplex test - BACK / PAGE 2) Tj
 /F1 12 Tf
 0 -30 Td
-(Token: PRINTBRIDGE-M0-DUPLEX-BACK-2026) Tj
+(Token: QUIREWIRE-M0-DUPLEX-BACK-2026) Tj
 ET
 q
 220 0 0 220 72 420 cm
@@ -180,7 +180,7 @@ $duplexObjects = @(
 Write-SimplePdf -Path (Join-Path $OutputDirectory 'm0-duplex-color-test.pdf') -Objects $duplexObjects -RootObjectNumber 1
 
 $manifest = [ordered]@{
-    schema = 'printbridge.m0.test-documents.v1'
+    schema = 'quirewire.m0.test-documents.v1'
     generatedUtc = $generatedUtc
     files = @(
         [ordered]@{ name = 'm0-text-test.txt'; purpose = 'Required one-page text print from Notepad or another normal Windows text application' },

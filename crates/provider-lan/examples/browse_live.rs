@@ -1,13 +1,13 @@
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
-use printbridge_provider_lan::browse_live_advertisement;
+use quirewire_provider_lan::browse_live_advertisement;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut arguments = std::env::args().skip(1);
     let expected_instance = arguments
         .next()
-        .unwrap_or_else(|| "Brother via PrintBridge".into());
+        .unwrap_or_else(|| "Brother via QuireWire".into());
     let expected_address = arguments
         .next()
         .unwrap_or_else(|| "192.168.100.72".into())

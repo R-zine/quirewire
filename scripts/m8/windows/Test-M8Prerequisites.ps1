@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$VBoxManage = (Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe')
 )
 
@@ -58,7 +58,7 @@ if ($freeBytes -lt $requiredDiskBytes) { $blocking += 'At least 12 GiB free spac
 if ($memoryBytes -lt 4GB) { $blocking += 'At least 4 GiB host RAM is required; the guest reserves 768 MiB while running.' }
 
 [pscustomobject]@{
-    schema = 'printbridge.m8.prerequisites.v1'
+    schema = 'quirewire.m8.prerequisites.v1'
     checked_utc = [DateTime]::UtcNow.ToString('o')
     ready = $blocking.Count -eq 0
     windows = [ordered]@{ caption = $os.Caption; build = $os.BuildNumber; x64 = $isX64 }
@@ -83,7 +83,7 @@ if ($memoryBytes -lt 4GB) { $blocking += 'At least 4 GiB host RAM is required; t
         owner_local_configured_ova_required = $true
     }
     network = [ordered]@{
-        printbridge_installer = 'offline'
+        quirewire_installer = 'offline'
         setup = 'required only to obtain VirtualBox, Debian inputs, and owner-licensed Brother packages when not already present'
     }
     usb_consent = 'The Linux guest captures the entire selected USB device; Windows cannot use that device while the bridge is running.'

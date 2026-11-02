@@ -2,14 +2,14 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, CheckState, ComponentState, DoctorCheck, DoctorReport, Hypervisor, OwnedVm,
     OwnershipMarker, UsbAccess, UsbIdentity, VmId,
 };
-use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
-use printbridge_provider_virtualbox::VirtualBoxProvider;
+use quirewire_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+use quirewire_provider_virtualbox::VirtualBoxProvider;
 
-pub const M3_CONFIG_SCHEMA: &str = "printbridge.m3.config.v1";
+pub const M3_CONFIG_SCHEMA: &str = "quirewire.m3.config.v1";
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct M3Config {
@@ -138,7 +138,7 @@ impl<P: Hypervisor + UsbAccess> M3AgentService<P> {
             Ok(devices) if devices.is_empty() => warning_check(
                 "usb_discovery",
                 "VirtualBox reported no host USB devices",
-                "Connect the printer, then run printbridgectl usb list.",
+                "Connect the printer, then run quirewirectl usb list.",
             ),
             Ok(devices) => DoctorCheck::pass(
                 "usb_discovery",
@@ -154,7 +154,7 @@ impl<P: Hypervisor + UsbAccess> M3AgentService<P> {
                 Ok(status) => warning_check(
                     "usb_selection",
                     format!("selected USB state is {}", status.state),
-                    "Start the owned VM and run printbridgectl usb attach.",
+                    "Start the owned VM and run quirewirectl usb attach.",
                 ),
                 Err(error) => failed_check("usb_selection", &error),
             },
@@ -270,8 +270,8 @@ impl<P: Hypervisor + UsbAccess> RequestHandler for M3AgentService<P> {
 
 #[must_use]
 pub const fn m3_help_text() -> &'static str {
-    "PrintBridge M3 CLI (real VirtualBox provider)\n\
-Usage: printbridgectl [--trace] [--config <path>] <command>\n\n\
+    "QuireWire M3 CLI (real VirtualBox provider)\n\
+Usage: quirewirectl [--trace] [--config <path>] <command>\n\n\
 Commands:\n\
   doctor       Validate VirtualBox, host virtualization, VM ownership, and USB\n\
   vm status    Show exact owned VM state\n\
@@ -281,7 +281,7 @@ Commands:\n\
   usb attach [--index N]   Attach configured identity or an explicit listed device\n\
   usb release [--index N]  Release configured identity or an explicit listed device\n\
   help         Show this help\n\n\
-Configuration schema: printbridge.m3.config.v1"
+Configuration schema: quirewire.m3.config.v1"
 }
 
 fn required<'a>(values: &'a BTreeMap<String, String>, key: &str) -> Result<&'a str, BridgeError> {
@@ -292,9 +292,9 @@ fn required<'a>(values: &'a BTreeMap<String, String>, key: &str) -> Result<&'a s
 }
 
 fn device_at(
-    devices: Vec<printbridge_domain::UsbDevice>,
+    devices: Vec<quirewire_domain::UsbDevice>,
     index: usize,
-) -> Result<printbridge_domain::UsbDevice, BridgeError> {
+) -> Result<quirewire_domain::UsbDevice, BridgeError> {
     if index == 0 {
         return Err(config_error(
             "USB index is one-based and must be at least 1",
@@ -353,14 +353,14 @@ fn warning_check(
 
 #[cfg(test)]
 mod tests {
-    use printbridge_core::fake::{FakeAction, FakePlatform};
-    use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+    use quirewire_core::fake::{FakeAction, FakePlatform};
+    use quirewire_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
 
     use super::{M3AgentService, M3Config};
 
-    const CONFIG: &str = "schema=printbridge.m3.config.v1\n\
+    const CONFIG: &str = "schema=quirewire.m3.config.v1\n\
 vm_uuid=00000000-0000-0000-0000-000000000002\n\
-vm_marker=printbridge.m2.fake-owned-vm.v1\n\
+vm_marker=quirewire.m2.fake-owned-vm.v1\n\
 usb_vendor_id=04f9\n\
 usb_product_id=0567\n\
 usb_serial=fake-sensitive-serial\n";

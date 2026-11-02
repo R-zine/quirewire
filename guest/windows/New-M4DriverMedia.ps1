@@ -33,7 +33,7 @@ function Quote-VisoPath([string]$Path) {
 }
 
 $manifestLines = @(
-    "PRINTBRIDGE_DRIVER_SCHEMA=$($values.PRINTBRIDGE_DRIVER_SCHEMA)",
+    "QUIREWIRE_DRIVER_SCHEMA=$($values.QUIREWIRE_DRIVER_SCHEMA)",
     "DRIVER_MODE=$Mode",
     "QUEUE_NAME=$($values.QUEUE_NAME)",
     "USB_VENDOR_ID=$($values.USB_VENDOR_ID)",
@@ -58,22 +58,22 @@ if ($Mode -eq 'official-brother') {
         'PPD_PATH', 'PPD_SHA256', 'REDISTRIBUTION'
     )
     $manifestLines += $officialKeys | ForEach-Object { "$_=$($values[$_])" }
-    $mediaFiles += "/printbridge-driver/$($values.PATCH_FILENAME)=$(Quote-VisoPath $BrotherPatchPath)"
-    $mediaFiles += "/printbridge-driver/$($values.DRIVER_FILENAME)=$(Quote-VisoPath $BrotherDriverPath)"
+    $mediaFiles += "/quirewire-driver/$($values.PATCH_FILENAME)=$(Quote-VisoPath $BrotherPatchPath)"
+    $mediaFiles += "/quirewire-driver/$($values.DRIVER_FILENAME)=$(Quote-VisoPath $BrotherDriverPath)"
 }
 
 $manifestPath = Join-Path $output "manifest-$Mode.env"
 [IO.File]::WriteAllText($manifestPath, (($manifestLines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
-$visoPath = Join-Path $output "printbridge-m4-$Mode.viso"
+$visoPath = Join-Path $output "quirewire-m4-$Mode.viso"
 $entries = @(
     '--iprt-iso-maker-file-marker-bourne-sh', [guid]::NewGuid().ToString(),
     '--file-mode=0444', '--dir-mode=0555', '--no-file-mode', '--no-dir-mode',
-    "/printbridge-driver/manifest.env=$(Quote-VisoPath $manifestPath)"
+    "/quirewire-driver/manifest.env=$(Quote-VisoPath $manifestPath)"
 ) + $mediaFiles
 [IO.File]::WriteAllText($visoPath, ($entries -join ' '), [Text.UTF8Encoding]::new($false))
 
 [pscustomobject]@{
-    schema = 'printbridge.m4.driver-media-result.v1'
+    schema = 'quirewire.m4.driver-media-result.v1'
     mode = $Mode
     media = $visoPath
     redistribution = if ($Mode -eq 'official-brother') { 'owner-local-only-pending-license-review' } else { 'source-only' }

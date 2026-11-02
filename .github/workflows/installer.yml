@@ -17,6 +17,9 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      - name: Test public source and license safety
+        shell: pwsh
+        run: ./tests/public/Invoke-PublicSourceTests.ps1
       - name: Test packaging safety
         shell: pwsh
         run: ./tests/m8/Invoke-M8SoftwareTests.ps1
@@ -26,6 +29,6 @@ jobs:
       - name: Upload clearly labeled development artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PrintBridge-UNSIGNED-DEVELOPMENT
+          name: QuireWire-UNSIGNED-DEVELOPMENT
           path: target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error

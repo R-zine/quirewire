@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, ComponentState, ComponentStatus, DependencyInfo, JobState, PrintQueue,
     PrinterEndpoint, WindowsPrintSubmission, WindowsPrinting, WindowsQueueStatus,
 };
@@ -23,19 +23,19 @@ use protocol::ProviderRecord;
 pub use runner::{CommandOutput, CommandRunner, ProcessRunner};
 
 pub const EXPECTED_DRIVER: &str = "Microsoft IPP Class Driver";
-pub const OWNERSHIP_SCHEMA: &str = "printbridge.m5.owned-printer.v1";
+pub const OWNERSHIP_SCHEMA: &str = "quirewire.m5.owned-printer.v1";
 pub const PRINTING_IMPLEMENTATION_MILESTONE: &str = "M5";
 pub const STARTUP_IMPLEMENTATION_MILESTONE: &str = "M6";
-pub const STARTUP_TASK_PATH: &str = r"\PrintBridge\";
+pub const STARTUP_TASK_PATH: &str = r"\QuireWire\";
 pub const STARTUP_TASK_NAME: &str = "Agent";
 pub const LAN_IMPLEMENTATION_MILESTONE: &str = "M10";
-const LAN_PROTOCOL: &str = "PRINTBRIDGE_LAN_V2";
+const LAN_PROTOCOL: &str = "QUIREWIRE_LAN_V2";
 
 static CORRELATION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 fn discover_resource(relative: &[&str]) -> Option<PathBuf> {
     let mut candidates = Vec::new();
-    if let Some(root) = env::var_os("PRINTBRIDGE_RESOURCE_ROOT") {
+    if let Some(root) = env::var_os("QUIREWIRE_RESOURCE_ROOT") {
         candidates.push(PathBuf::from(root));
     }
     if let Ok(executable) = env::current_exe()
@@ -113,14 +113,14 @@ impl WindowsLanProvider<ProcessRunner> {
     ) -> Result<Self, BridgeError> {
         let script = discover_resource(&["scripts", "m10", "windows", "Invoke-M10LanSharing.ps1"])
             .ok_or_else(|| BridgeError::MissingDependency {
-                dependency: "PrintBridge M10 LAN provider resource".into(),
-                action: "Repair the PrintBridge installation or restore Invoke-M10LanSharing.ps1."
+                dependency: "QuireWire M10 LAN provider resource".into(),
+                action: "Repair the QuireWire installation or restore Invoke-M10LanSharing.ps1."
                     .into(),
             })?;
         let program_files =
             env::var_os("ProgramFiles").ok_or_else(|| BridgeError::MissingDependency {
                 dependency: "ProgramFiles".into(),
-                action: "Run PrintBridge under the owning interactive Windows user.".into(),
+                action: "Run QuireWire under the owning interactive Windows user.".into(),
             })?;
         Ok(Self::new(WindowsLanConfig {
             powershell: PathBuf::from("powershell.exe"),
@@ -197,9 +197,9 @@ impl<R: CommandRunner> WindowsLanProvider<R> {
         if output.exit_code != Some(0) || !record.boolean("ok")? {
             return Err(BridgeError::PermissionDenied {
                 operation: "checking approved-LAN sharing policy".into(),
-                action: record.optional_text("error_message")?.unwrap_or_else(|| {
-                    "Run PrintBridge Repair and inspect Windows Firewall.".into()
-                }),
+                action: record
+                    .optional_text("error_message")?
+                    .unwrap_or_else(|| "Run QuireWire Repair and inspect Windows Firewall.".into()),
             });
         }
         let address = record
@@ -241,8 +241,8 @@ impl WindowsStartupProvider<ProcessRunner> {
             "Invoke-M6Startup.ps1",
         ])
         .ok_or_else(|| BridgeError::MissingDependency {
-            dependency: "PrintBridge startup provider resource".into(),
-            action: "Repair the PrintBridge installation or restore the tracked M6 startup provider script."
+            dependency: "QuireWire startup provider resource".into(),
+            action: "Repair the QuireWire installation or restore the tracked M6 startup provider script."
                 .into(),
         })?;
         Ok(Self::new(WindowsStartupConfig {
@@ -273,7 +273,7 @@ impl<R: CommandRunner> WindowsStartupProvider<R> {
     fn invoke_startup(
         &self,
         action: &str,
-    ) -> Result<printbridge_domain::StartupRegistration, BridgeError> {
+    ) -> Result<quirewire_domain::StartupRegistration, BridgeError> {
         let arguments = [
             OsString::from("-NoLogo"),
             OsString::from("-NoProfile"),
@@ -299,20 +299,20 @@ impl<R: CommandRunner> WindowsStartupProvider<R> {
         let record = ProviderRecord::parse(&output.stdout)?;
         if output.exit_code != Some(0) || !record.boolean("ok")? {
             return Err(BridgeError::PermissionDenied {
-                operation: "managing the PrintBridge login task".into(),
+                operation: "managing the QuireWire login task".into(),
                 action: record.optional_text("error_message")?.unwrap_or_else(|| {
                     "Review Task Scheduler permissions and exact task ownership.".into()
                 }),
             });
         }
-        Ok(printbridge_domain::StartupRegistration {
+        Ok(quirewire_domain::StartupRegistration {
             enabled: record.boolean("enabled")?,
             owner: record.text("owner_sid")?,
         })
     }
 }
 
-impl<R: CommandRunner> printbridge_domain::Startup for WindowsStartupProvider<R> {
+impl<R: CommandRunner> quirewire_domain::Startup for WindowsStartupProvider<R> {
     fn enable_login_start(&mut self) -> Result<(), BridgeError> {
         let registration = self.invoke_startup("Enable")?;
         if registration.enabled {
@@ -335,7 +335,7 @@ impl<R: CommandRunner> printbridge_domain::Startup for WindowsStartupProvider<R>
         }
     }
 
-    fn verify_registration(&self) -> Result<printbridge_domain::StartupRegistration, BridgeError> {
+    fn verify_registration(&self) -> Result<quirewire_domain::StartupRegistration, BridgeError> {
         self.invoke_startup("Status")
     }
 }
@@ -373,28 +373,24 @@ impl WindowsPrintProvider<ProcessRunner> {
         let local_app_data =
             env::var_os("LOCALAPPDATA").ok_or_else(|| BridgeError::MissingDependency {
                 dependency: "LOCALAPPDATA".into(),
-                action: "Run PrintBridge under the owning interactive Windows user.".into(),
+                action: "Run QuireWire under the owning interactive Windows user.".into(),
             })?;
-        let powershell = env::var_os("PRINTBRIDGE_POWERSHELL")
+        let powershell = env::var_os("QUIREWIRE_POWERSHELL")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("powershell.exe"));
-        let script = env::var_os("PRINTBRIDGE_WINDOWS_PROVIDER_SCRIPT")
+        let script = env::var_os("QUIREWIRE_WINDOWS_PROVIDER_SCRIPT")
             .map(PathBuf::from)
             .or_else(|| {
-                discover_resource(&[
-                    "scripts",
-                    "m5",
-                    "windows",
-                    "Invoke-M5WindowsPrinting.ps1",
-                ])
+                discover_resource(&["scripts", "m5", "windows", "Invoke-M5WindowsPrinting.ps1"])
             })
             .ok_or_else(|| BridgeError::MissingDependency {
-                dependency: "PrintBridge Windows printing provider resource".into(),
-                action: "Repair the PrintBridge installation or set PRINTBRIDGE_WINDOWS_PROVIDER_SCRIPT."
-                    .into(),
+                dependency: "QuireWire Windows printing provider resource".into(),
+                action:
+                    "Repair the QuireWire installation or set QUIREWIRE_WINDOWS_PROVIDER_SCRIPT."
+                        .into(),
             })?;
         let state_path = PathBuf::from(local_app_data)
-            .join("PrintBridge")
+            .join("QuireWire")
             .join("m5-windows-printer.json");
         Ok(Self::new(WindowsProviderConfig::new(
             powershell,
@@ -526,7 +522,7 @@ impl<R: CommandRunner> WindowsPrinting for WindowsPrintProvider<R> {
         let status = self.status()?;
         let queue = status.queue.ok_or_else(|| BridgeError::PrinterMissing {
             printer: name.into(),
-            action: "Run 'printbridgectl printer install' first.".into(),
+            action: "Run 'quirewirectl printer install' first.".into(),
         })?;
         if queue.driver != EXPECTED_DRIVER {
             return Err(BridgeError::UnsupportedDriver {
@@ -677,9 +673,8 @@ fn unsupported_ipp_error() -> BridgeError {
 fn ownership_error(detail: &str) -> BridgeError {
     BridgeError::PermissionDenied {
         operation: detail.into(),
-        action:
-            "Refusing to change a queue not proven to be the configured PrintBridge-owned queue."
-                .into(),
+        action: "Refusing to change a queue not proven to be the configured QuireWire-owned queue."
+            .into(),
     }
 }
 
@@ -699,7 +694,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    use printbridge_domain::{JobState, PrinterEndpoint, WindowsPrinting};
+    use quirewire_domain::{JobState, PrinterEndpoint, WindowsPrinting};
 
     use super::{
         CommandOutput, CommandRunner, WindowsLanConfig, WindowsLanProvider, WindowsPrintProvider,
@@ -730,7 +725,7 @@ mod tests {
             _executable: &Path,
             arguments: &[OsString],
             _timeout: Duration,
-        ) -> Result<CommandOutput, printbridge_domain::BridgeError> {
+        ) -> Result<CommandOutput, quirewire_domain::BridgeError> {
             self.calls.lock().expect("calls").push(arguments.to_vec());
             Ok(self.outputs.lock().expect("outputs").pop().expect("output"))
         }
@@ -739,7 +734,7 @@ mod tests {
     fn endpoint() -> PrinterEndpoint {
         PrinterEndpoint::Loopback {
             port: 8644,
-            queue: "PrintBridge_DCP_L2600D".into(),
+            queue: "QuireWire_DCP_L2600D".into(),
         }
     }
 
@@ -748,14 +743,14 @@ mod tests {
             "powershell.exe",
             "provider.ps1",
             "C:/state/owner.json",
-            "Brother via PrintBridge",
+            "Brother via QuireWire",
             endpoint(),
         )
     }
 
     fn record(queue_found: bool, owned: bool) -> String {
         format!(
-            "PRINTBRIDGE_WINDOWS_V1\nok=true\nipp_url_supported=true\nprint_management_version=MS4x\nqueue_found={queue_found}\nownership_verified={owned}\nspooler_running=true\nis_default=false\nipp_url=aHR0cDovLzEyNy4wLjAuMTo4NjQ0L3ByaW50ZXJzL1ByaW50QnJpZGdlX0RDUEwyNjAwRA==\nqueue_name=QnJvdGhlciB2aWEgUHJpbnRCcmlkZ2U=\ndriver_name=TWljcm9zb2Z0IElQUCBDbGFzcyBEcml2ZXI=\nport_name=V1NELXRlc3Q=\nprinter_status=Tm9ybWFs\n"
+            "QUIREWIRE_WINDOWS_V1\nok=true\nipp_url_supported=true\nprint_management_version=MS4x\nqueue_found={queue_found}\nownership_verified={owned}\nspooler_running=true\nis_default=false\nipp_url=aHR0cDovLzEyNy4wLjAuMTo4NjQ0L3ByaW50ZXJzL1ByaW50QnJpZGdlX0RDUEwyNjAwRA==\nqueue_name=QnJvdGhlciB2aWEgUHJpbnRCcmlkZ2U=\ndriver_name=TWljcm9zb2Z0IElQUCBDbGFzcyBEcml2ZXI=\nport_name=V1NELXRlc3Q=\nprinter_status=Tm9ybWFs\n"
         )
     }
 
@@ -782,7 +777,7 @@ mod tests {
         }]);
         let mut provider = WindowsPrintProvider::with_runner(config(), runner);
         let queue = provider
-            .register_owned_queue("Brother via PrintBridge", &endpoint())
+            .register_owned_queue("Brother via QuireWire", &endpoint())
             .expect("install");
         assert_eq!(queue.driver, "Microsoft IPP Class Driver");
         let call: Vec<String> = provider.runner.calls()[0]
@@ -792,7 +787,7 @@ mod tests {
         assert!(call.windows(2).any(|pair| pair == ["-Action", "Install"]));
         assert!(
             call.windows(2)
-                .any(|pair| pair == ["-PrinterName", "Brother via PrintBridge"])
+                .any(|pair| pair == ["-PrinterName", "Brother via QuireWire"])
         );
         assert!(call.iter().all(|part| !part.contains("Add-Printer")));
     }
@@ -827,7 +822,7 @@ mod tests {
         ]);
         let mut provider = WindowsPrintProvider::with_runner(config(), runner);
         let result = provider
-            .submit_windows_test_page("Brother via PrintBridge")
+            .submit_windows_test_page("Brother via QuireWire")
             .expect("submission");
         assert_eq!(result.state, JobState::Accepted);
         assert_eq!(result.spooler_job_id, Some(17));
@@ -838,7 +833,7 @@ mod tests {
     fn lan_status_parses_the_explicit_scope_protocol() {
         let runner = ScriptedRunner::new(vec![CommandOutput {
             exit_code: Some(0),
-            stdout: "PRINTBRIDGE_LAN_V2\nok=true\nnetwork_allowed=true\ninterface_alias=RXRoZXJuZXQ=\nnetwork_category=UHVibGlj\naddress=MTkyLjE2OC4xLjIw\nfirewall_ready=true\nreason=cmVhZHk=\nerror_code=\nerror_message=\n".into(),
+            stdout: "QUIREWIRE_LAN_V2\nok=true\nnetwork_allowed=true\ninterface_alias=RXRoZXJuZXQ=\nnetwork_category=UHVibGlj\naddress=MTkyLjE2OC4xLjIw\nfirewall_ready=true\nreason=cmVhZHk=\nerror_code=\nerror_message=\n".into(),
             stderr: String::new(),
         }]);
         let provider = WindowsLanProvider::with_runner(

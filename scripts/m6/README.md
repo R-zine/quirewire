@@ -1,7 +1,7 @@
 # M6 headless supervisor runbook
 
-M6 has no desktop UI. `printbridge-agent.exe` owns VirtualBox/CUPS/USB/Windows
-reconciliation; `printbridgectl.exe` is only a named-pipe client. The pipe name
+M6 has no desktop UI. `quirewire-agent.exe` owns VirtualBox/CUPS/USB/Windows
+reconciliation; `quirewirectl.exe` is only a named-pipe client. The pipe name
 contains the current SID, rejects remote clients, and has a protected DACL that
 grants access only to that SID. The Task Scheduler principal is the same user,
 Interactive Token, Limited run level, with `IgnoreNew` duplicate handling.
@@ -19,18 +19,18 @@ cargo build --workspace --all-features
 $m4 = '.\artifacts\m4\acceptance\20261028T204354Z\acceptance-state.json'
 .\scripts\m6\windows\New-M6Configuration.ps1 `
   -M4StatePath $m4 `
-  -AgentExecutable (Resolve-Path .\target\debug\printbridge-agent.exe)
-$config = Join-Path $env:LOCALAPPDATA 'PrintBridge\m6.conf'
-Start-Process -WindowStyle Hidden .\target\debug\printbridge-agent.exe `
+  -AgentExecutable (Resolve-Path .\target\debug\quirewire-agent.exe)
+$config = Join-Path $env:LOCALAPPDATA 'QuireWire\m6.conf'
+Start-Process -WindowStyle Hidden .\target\debug\quirewire-agent.exe `
   -ArgumentList @('run', '--config', $config)
 Start-Sleep -Seconds 4
-.\target\debug\printbridgectl.exe devices
-.\target\debug\printbridgectl.exe setup --index 1
-.\target\debug\printbridgectl.exe status
+.\target\debug\quirewirectl.exe devices
+.\target\debug\quirewirectl.exe setup --index 1
+.\target\debug\quirewirectl.exe status
 ```
 
 `setup --index 1` succeeds only if index 1 is the exact serial-bearing device in
-the accepted M4 evidence; it then registers `\PrintBridge\Agent` at logon. The
+the accepted M4 evidence; it then registers `\QuireWire\Agent` at logon. The
 configuration and state directory ACLs allow only the owner SID and SYSTEM.
 Serial values are never emitted by the CLI, logs, or diagnostics.
 
@@ -50,7 +50,7 @@ proves only Windows spooler submission.
 3. USB reconnect: unplug the Brother USB cable. Within the bounded retry window,
    `status` must report `waiting_for_usb` without a crash or tight loop. Replug
    it, wait for `ready`, run `test-print`, and confirm the page.
-4. Recoverable CUPS/guest failure: run `printbridgectl restart`. During recovery,
+4. Recoverable CUPS/guest failure: run `quirewirectl restart`. During recovery,
    status must be `connecting`, then `ready` without opening VirtualBox. Run
    `test-print` and confirm the page. An externally restarted CUPS service is
    handled by the same polling path; M6's non-root guest account does not expose

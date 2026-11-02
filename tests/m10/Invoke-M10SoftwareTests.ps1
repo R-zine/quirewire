@@ -41,7 +41,7 @@ foreach ($relative in @(
 Check 'live DNS-SD diagnostic avoids competing for UDP 5353' {
     (Text 'crates\provider-lan\src\lib.rs') -match 'UdpSocket::bind' -and
     (Text 'crates\provider-lan\src\lib.rs') -match 'ptr_query' -and
-    (Text 'crates\provider-lan\src\lib.rs') -match 'printers/PrintBridge_DCP_L2600D' -and
+    (Text 'crates\provider-lan\src\lib.rs') -match 'printers/QuireWire_DCP_L2600D' -and
     (Text 'crates\provider-lan\src\lib.rs') -match 'AIRPRINT_SERVICE_TYPE' -and
     (Text 'crates\agent\src\main.rs') -match 'diagnose-lan' -and
     (Text 'crates\agent\src\main.rs') -match 'std::fs::write' -and
@@ -88,8 +88,8 @@ Check 'subnet mask arithmetic avoids signed PowerShell hexadecimal literals' {
     $lanScript -match 'Test-RemoteAddressMatchesApproved'
 }
 Check 'LAN NAT rule has independent ownership metadata and collision refusal' {
-    $virtualbox -match 'printbridge\.m10\.lan-forward\.v1' -and
-    $virtualbox -match 'printbridge-m10-lan-ipp' -and
+    $virtualbox -match 'quirewire\.m10\.lan-forward\.v1' -and
+    $virtualbox -match 'quirewire-m10-lan-ipp' -and
     $virtualbox -match 'refusing to remove a LAN forward without exact ownership metadata'
 }
 Check 'DNS-SD data comes from actual CUPS attributes' {
@@ -103,8 +103,8 @@ Check 'DNS-SD includes the AirPrint universal IPP subtype' {
     $lan -match '_universal\._sub\._ipp\._tcp\.local\.'
 }
 Check 'guest permits only the owned queue path through CUPS' {
-    $guestPolicy -match '<Location /printers/PrintBridge_DCP_L2600D>' -and
-    $guestPolicy -match 'ServerAlias printbridge-m4\.local' -and
+    $guestPolicy -match '<Location /printers/QuireWire_DCP_L2600D>' -and
+    $guestPolicy -match 'ServerAlias quirewire-m4\.local' -and
     $guestPolicy -notmatch '<Location />' -and
     $guestPolicy -notmatch '<Location /admin>'
 }
@@ -120,7 +120,7 @@ Check 'desktop launches hidden on-demand agent and explicit Exit shuts down' {
     $runtime -match 'Command::Heartbeat' -and
     $runtime -match 'Command::Start' -and
     $desktop -match 'Command::Shutdown' -and
-    $desktop -match 'Exit PrintBridge \(stop sharing\)'
+    $desktop -match 'Exit QuireWire \(stop sharing\)'
 }
 Check 'installer removes legacy task and never enables or starts it' {
     $lifecycle -notmatch 'Invoke-Startup Enable' -and

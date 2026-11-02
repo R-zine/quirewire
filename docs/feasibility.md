@@ -9,7 +9,7 @@ VirtualBox guest. The guest has the official Brother RPM, a working `dcpl2600d`
 CUPS queue, and a loopback-only IPP endpoint. The owner explicitly confirmed the
 Linux baseline (`dcpl2600d-1`), Windows Edge PDF (`dcpl2600d-2`), and Windows
 Notepad text (`dcpl2600d-3`) sheets physically printed. Windows registered
-`Brother via PrintBridge POC` with the Microsoft inbox IPP driver. The mandatory
+`Brother via QuireWire POC` with the Microsoft inbox IPP driver. The mandatory
 M0 gate has passed; M1 has not been started.
 
 The required Microsoft inbox driver is named **`Microsoft IPP Class Driver`**.
@@ -26,7 +26,7 @@ not an M0 pass.
 | Accessible Windows execution context | x64; registry `DisplayVersion=25H2`, build `26200.9711`; runtime reports `Microsoft Windows 10.0.26200` | PASS: SOFTWARE ONLY |
 | PowerShell / PrintManagement | Windows PowerShell `5.1.26100.9711`; `Add-Printer` includes `-IppURL`; spooler running/automatic | PASS: SOFTWARE ONLY |
 | Windows Protected Print policy | `HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Printers\WPP` not present in this context; effective owner-machine Settings state still requires confirmation | PASS: SOFTWARE ONLY (inventory only) |
-| Visible Windows queues/drivers | The pre-existing direct queue is `Brother DCP-L2600D` on `USB001` using `Brother Laser Type1 Class Driver`; the marker-owned `Brother via PrintBridge POC` queue uses exactly `Microsoft IPP Class Driver` | PASS: SOFTWARE ONLY (IPP driver verified) |
+| Visible Windows queues/drivers | The pre-existing direct queue is `Brother DCP-L2600D` on `USB001` using `Brother Laser Type1 Class Driver`; the marker-owned `Brother via QuireWire POC` queue uses exactly `Microsoft IPP Class Driver` | PASS: SOFTWARE ONLY (IPP driver verified) |
 | Visible USB/PnP devices | After moving from a faulty USB port, Windows enumerated Brother composite interfaces as `VID_04F9:PID_0567`; the serial was captured only in ignored local evidence | PASS: SOFTWARE ONLY (hardware enumerated) |
 | IPP endpoint / TCP 631 | VirtualBox NAT forwards only `127.0.0.1:8631` to guest TCP 631; TCP probe and HTTP queue page passed; IPP Get-Printer-Attributes passed | PASS: SOFTWARE ONLY |
 | Linux distribution/architecture | Fedora Linux 44 Cloud Edition, x86_64, kernel `6.19.10-300.fc44.x86_64` | PASS: SOFTWARE ONLY |
@@ -215,7 +215,7 @@ Do not use `--permanent` for this feasibility test. If Fedora is using UFW inste
 first record `sudo ufw status verbose`, then use the actual Windows IPv4:
 
 ```bash
-sudo ufw allow from <WINDOWS_IPV4>/32 to any port 631 proto tcp comment 'PrintBridge M0 POC'
+sudo ufw allow from <WINDOWS_IPV4>/32 to any port 631 proto tcp comment 'QuireWire M0 POC'
 ```
 
 Do not add an any-source rule. After the POC, remove exactly that rule:
@@ -264,7 +264,7 @@ In PowerShell from the repository root, substitute the URL from step 4:
 
 ```powershell
 $IppUrl = 'ipp://<LINUX_LAN_IPV4>:631/printers/<EXACT_CUPS_QUEUE>'
-$PocName = 'Brother via PrintBridge POC'
+$PocName = 'Brother via QuireWire POC'
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   .\scripts\feasibility\windows\New-M0TestDocuments.ps1
@@ -325,7 +325,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 The apply path is equivalent to the required direct command:
 
 ```powershell
-Add-Printer -Name 'Brother via PrintBridge POC' -IppURL $IppUrl
+Add-Printer -Name 'Brother via QuireWire POC' -IppURL $IppUrl
 ```
 
 The wrapper additionally marks ownership, refuses name collisions, probes the TCP
@@ -339,15 +339,15 @@ required jobs.
 
 1. Open `artifacts\m0\test-documents\m0-text-test.txt` in **Notepad** (or another
    ordinary Windows text editor). Use **File > Print**, select
-   `Brother via PrintBridge POC`, and print one page.
+   `Brother via QuireWire POC`, and print one page.
 2. Inspect the physical sheet. Confirm the title, complete path text, and token
-   `PRINTBRIDGE-M0-TEXT-2026`. Record application, local time, CUPS request ID, job
+   `QUIREWIRE-M0-TEXT-2026`. Record application, local time, CUPS request ID, job
    outcome, and `PASS` or `FAIL`.
 3. Open `artifacts\m0\test-documents\m0-pdf-image-test.pdf` in a normal PDF viewer
    such as Microsoft Edge or Adobe Acrobat Reader. Use its ordinary Print dialog,
    select the POC queue, and print one page.
 4. Inspect the physical sheet. Confirm legible text, the red/blue raster
-   checkerboard, and token `PRINTBRIDGE-M0-PDF-IMAGE-2026`. Record the same evidence.
+   checkerboard, and token `QUIREWIRE-M0-PDF-IMAGE-2026`. Record the same evidence.
 5. If the IPP attributes advertise color and duplex, open
    `m0-duplex-color-test.pdf`, select two-sided/color in the normal Print dialog,
    and verify FRONT and BACK appear on opposite sides with the expected colors.

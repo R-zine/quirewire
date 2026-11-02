@@ -1,4 +1,4 @@
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeStatus, CheckState, ComponentState, ComponentStatus, Components, DoctorCheck,
     DoctorReport, OwnedVm, Platform, PrinterEndpoint, UsbIdentity,
 };
@@ -116,21 +116,21 @@ impl<P: Platform> Controller<P> {
     }
 }
 
-fn error_component(error: printbridge_domain::BridgeError) -> ComponentStatus {
+fn error_component(error: quirewire_domain::BridgeError) -> ComponentStatus {
     ComponentStatus::with_detail(ComponentState::Error, error.safe_summary())
 }
 
-fn failed_check(name: &'static str, error: &printbridge_domain::BridgeError) -> DoctorCheck {
+fn failed_check(name: &'static str, error: &quirewire_domain::BridgeError) -> DoctorCheck {
     DoctorCheck::fail(
         name,
         error.safe_summary(),
-        "Run printbridgectl doctor after correcting the reported condition.",
+        "Run quirewirectl doctor after correcting the reported condition.",
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use printbridge_domain::{BridgeError, BridgePhase};
+    use quirewire_domain::{BridgeError, BridgePhase};
 
     use crate::fake::{FakeOperation, FakePlatform};
 

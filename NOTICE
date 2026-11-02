@@ -1,0 +1,13 @@
+QuireWire
+Copyright 2026 Ivan Radev
+
+QuireWire is available under MIT OR Apache-2.0, except for separately identified
+third-party material.
+
+The AirSane compatibility patch in guest/patches is GPL-3.0-only and retains
+the rights and notices of the AirSane contributors.
+
+Brother, Microsoft, Windows, Mopria, AirScan, Apple, macOS, Oracle, VirtualBox,
+Debian, CUPS, SANE, AirSane, and other names may be trademarks of their
+respective owners. QuireWire is an independent project and is not affiliated
+with, endorsed by, or sponsored by those owners.

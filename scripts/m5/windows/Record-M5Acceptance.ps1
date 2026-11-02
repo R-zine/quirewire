@@ -10,9 +10,9 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('PASS', 'FAIL', 'NOT TESTED')][string]$DefaultPrinterPreserved,
     [Parameter(Mandatory = $true)][ValidateSet('PASS', 'FAIL', 'NOT TESTED')][string]$UnrelatedPrintersPreserved,
     [Parameter(Mandatory = $true)][ValidateSet('PASS', 'FAIL', 'NOT TESTED')][string]$FinalReinstall,
-    [string]$PrinterName = 'Brother via PrintBridge',
+    [string]$PrinterName = 'Brother via QuireWire',
     [string]$DriverName = 'Microsoft IPP Class Driver',
-    [string]$IppUrl = 'http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D',
+    [string]$IppUrl = 'http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D',
     [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$Evidence,
     [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$Notes,
     [switch]$OwnerConfirmedPhysicalOutput,
@@ -54,7 +54,7 @@ else {
 }
 
 $record = [ordered]@{
-    schema = 'printbridge.m5.acceptance.v1'
+    schema = 'quirewire.m5.acceptance.v1'
     recordedUtc = [DateTime]::UtcNow.ToString('o')
     result = $result
     printerName = $PrinterName
@@ -73,7 +73,7 @@ $markdownPath = Join-Path $OutputDirectory "$stamp-m5-acceptance.md"
 $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
 $rows = foreach ($entry in $checks.GetEnumerator()) { "| $($entry.Key) | $($entry.Value) |" }
 @"
-# PrintBridge M5 physical acceptance
+# QuireWire M5 physical acceptance
 
 - Recorded UTC: $($record.recordedUtc)
 - Result: **$result**

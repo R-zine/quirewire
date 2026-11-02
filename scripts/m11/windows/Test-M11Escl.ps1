@@ -84,7 +84,7 @@ if (-not $makeModel -or $sources.Count -eq 0 -or $formats.Count -eq 0) {
 }
 
 [pscustomobject]@{
-    schema = 'printbridge.m11.escl-probe.v1'
+    schema = 'quirewire.m11.escl-probe.v1'
     endpoint = $uri.AbsoluteUri
     http_status = 200
     make_model = [string]$makeModel

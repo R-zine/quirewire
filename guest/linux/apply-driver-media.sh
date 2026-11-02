@@ -5,12 +5,12 @@ if [[ "$(id -u)" -ne 0 ]]; then
   echo "ERROR: driver media application requires root" >&2
   exit 1
 fi
-[[ -f /etc/printbridge/guest.env ]] || { echo "ERROR: not a PrintBridge-owned guest" >&2; exit 1; }
+[[ -f /etc/quirewire/guest.env ]] || { echo "ERROR: not a QuireWire-owned guest" >&2; exit 1; }
 
-mount_dir=/run/printbridge-driver-media
+mount_dir=/run/quirewire-driver-media
 mounted_here=no
-install -d -m 0755 "$mount_dir" /var/lib/printbridge /var/log/printbridge
-exec > >(tee -a /var/log/printbridge/driver-media.log) 2>&1
+install -d -m 0755 "$mount_dir" /var/lib/quirewire /var/log/quirewire
+exec > >(tee -a /var/log/quirewire/driver-media.log) 2>&1
 
 cleanup() {
   if [[ "$mounted_here" == yes ]]; then
@@ -31,9 +31,9 @@ if ! mountpoint -q "$mount_dir"; then
   mounted_here=yes
 fi
 
-manifest="$mount_dir/printbridge-driver/manifest.env"
+manifest="$mount_dir/quirewire-driver/manifest.env"
 if [[ ! -r "$manifest" ]]; then
-  echo "Mounted media is not PrintBridge driver media; leaving guest unchanged."
+  echo "Mounted media is not QuireWire driver media; leaving guest unchanged."
   exit 0
 fi
 
@@ -53,7 +53,7 @@ validate_token() {
   }
 }
 
-schema=$(manifest_value PRINTBRIDGE_DRIVER_SCHEMA)
+schema=$(manifest_value QUIREWIRE_DRIVER_SCHEMA)
 driver_mode=$(manifest_value DRIVER_MODE)
 queue_name=$(manifest_value QUEUE_NAME)
 vendor_id=$(manifest_value USB_VENDOR_ID)
@@ -62,14 +62,14 @@ for pair in "schema:$schema" "driver_mode:$driver_mode" "queue_name:$queue_name"
   "vendor_id:$vendor_id" "product_id:$product_id"; do
   validate_token "${pair%%:*}" "${pair#*:}"
 done
-[[ "$schema" == printbridge.m4.driver-media.v1 ]]
-[[ "$queue_name" == PrintBridge_DCP_L2600D ]]
+[[ "$schema" == quirewire.m4.driver-media.v1 ]]
+[[ "$queue_name" == QuireWire_DCP_L2600D ]]
 [[ "$vendor_id" =~ ^[0-9a-fA-F]{4}$ && "$product_id" =~ ^[0-9a-fA-F]{4}$ ]]
 
-/usr/local/lib/printbridge/provision-base.sh --repair
+/usr/local/lib/quirewire/provision-base.sh --repair
 systemctl is-active --quiet cups.service
 
-selection=/var/lib/printbridge/driver-selection.env
+selection=/var/lib/quirewire/driver-selection.env
 if [[ -f "$selection" ]]; then
   previous_mode=$(sed -n 's/^driver_mode=//p' "$selection")
   [[ "$previous_mode" == "$driver_mode" ]] || {
@@ -101,8 +101,8 @@ case "$driver_mode" in
       validate_token "${pair%%:*}" "${pair#*:}"
     done
     [[ "$redistribution" == owner-local-only-pending-license-review ]]
-    patch_deb="$mount_dir/printbridge-driver/$patch_filename"
-    driver_deb="$mount_dir/printbridge-driver/$driver_filename"
+    patch_deb="$mount_dir/quirewire-driver/$patch_filename"
+    driver_deb="$mount_dir/quirewire-driver/$driver_filename"
     printf '%s  %s\n' "$patch_sha" "$patch_deb" | sha256sum --check --strict -
     printf '%s  %s\n' "$driver_sha" "$driver_deb" | sha256sum --check --strict -
     [[ "$(dpkg-deb -f "$patch_deb" Package)" == "$patch_package" ]]
@@ -129,7 +129,7 @@ case "$driver_mode" in
     # The distro workflow is intentionally attempted before queue mutation. It
     # fails actionably when the pinned driver does not advertise this exact model.
     # shellcheck disable=SC1091
-    . /usr/local/lib/printbridge/debian.env
+    . /usr/local/lib/quirewire/debian.env
     apt-get -o Acquire::Check-Valid-Until=false update
     apt-get install -y --no-install-recommends "printer-driver-brlaser=${BRLASER_VERSION}"
     model=$(lpinfo -m | awk 'BEGIN{IGNORECASE=1} /DCP-L2600D/{print $1; exit}')
@@ -161,14 +161,14 @@ if lpstat -p DCPL2600D >/dev/null 2>&1; then
   lpadmin -x DCPL2600D
 fi
 lpadmin -p "$queue_name" -E -v "$device_uri" "${model_argument[@]}" \
-  -D 'Brother DCP-L2600D via PrintBridge' \
+  -D 'Brother DCP-L2600D via QuireWire' \
   -o printer-is-shared=true -o printer-error-policy=retry-job
 cupsaccept "$queue_name"
 cupsenable "$queue_name"
 /usr/sbin/cupsd -t
 
 {
-  echo 'schema=printbridge.m4.driver-selection.v1'
+  echo 'schema=quirewire.m4.driver-selection.v1'
   echo "driver_mode=$driver_mode"
   echo "queue_name=$queue_name"
   echo "usb_id=$usb_id"
@@ -179,9 +179,9 @@ cupsenable "$queue_name"
 } > "$selection"
 chmod 0644 "$selection"
 
-/usr/local/sbin/printbridge-health
+/usr/local/sbin/quirewire-health
 sync
-echo "PrintBridge driver media completed without logging the USB serial."
-if [[ "${PRINTBRIDGE_POWER_OFF_AFTER_MEDIA:-0}" == 1 ]]; then
+echo "QuireWire driver media completed without logging the USB serial."
+if [[ "${QUIREWIRE_POWER_OFF_AFTER_MEDIA:-0}" == 1 ]]; then
   systemctl poweroff
 fi

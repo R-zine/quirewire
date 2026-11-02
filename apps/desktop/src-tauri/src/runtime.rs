@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
-use printbridge_ipc::Command;
+use quirewire_ipc::Command;
 use tauri::{AppHandle, Emitter};
 
 use crate::TrayOperation;
@@ -23,20 +23,20 @@ impl AgentLaunch {
             DesktopError::runtime("LOCALAPPDATA is unavailable for the owner configuration.")
         })?;
         let config = PathBuf::from(local_app_data)
-            .join("PrintBridge")
+            .join("QuireWire")
             .join("m6.conf");
         let current = std::env::current_exe().map_err(|error| {
             DesktopError::runtime(format!("Cannot resolve the desktop executable: {error}"))
         })?;
         let parent = current.parent().unwrap_or(resource_dir);
         let candidates = [
-            resource_dir.join("bin/printbridge-agent.exe"),
-            parent.join("bin/printbridge-agent.exe"),
-            parent.join("printbridge-agent.exe"),
+            resource_dir.join("bin/quirewire-agent.exe"),
+            parent.join("bin/quirewire-agent.exe"),
+            parent.join("quirewire-agent.exe"),
             parent
                 .parent()
                 .unwrap_or(parent)
-                .join("printbridge-agent.exe"),
+                .join("quirewire-agent.exe"),
         ];
         let executable = candidates
             .into_iter()
@@ -107,5 +107,5 @@ pub fn start(app: AppHandle, resource_dir: PathBuf, client: AgentClient) {
 }
 
 fn emit(app: &AppHandle, ok: bool, message: String) {
-    let _ = app.emit("printbridge:operation", TrayOperation { ok, message });
+    let _ = app.emit("quirewire:operation", TrayOperation { ok, message });
 }

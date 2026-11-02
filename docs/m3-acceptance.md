@@ -8,9 +8,9 @@ lifecycle and USB ownership. M4 returns to physical guest printing.
 
 - The disposable test VM is M3-owned, has no unrelated USB filters, and uses a
   configuration whose UUID and marker match the live extra-data values.
-- `printbridgectl doctor` reports supported VirtualBox and hardware
+- `quirewirectl doctor` reports supported VirtualBox and hardware
   virtualization.
-- `printbridgectl usb list` shows the intended Brother as `04f9:0567`. Its serial
+- `quirewirectl usb list` shows the intended Brother as `04f9:0567`. Its serial
   value remains redacted.
 - Any document currently printing from Windows has completed.
 
@@ -18,9 +18,9 @@ lifecycle and USB ownership. M4 returns to physical guest printing.
 
 1. Explicitly consent to transferring `04f9:0567` from Windows to the configured
    disposable VM.
-2. Run `printbridgectl --config <path> vm start` twice. Both calls must succeed;
+2. Run `quirewirectl --config <path> vm start` twice. Both calls must succeed;
    `vm status` must be `ready`.
-3. Run `printbridgectl --config <path> usb attach` twice. Both calls must be
+3. Run `quirewirectl --config <path> usb attach` twice. Both calls must be
    safe/idempotent. If the configuration intentionally omits a serial and more
    than one identical serial-less device exists, review `usb list` and use
    `usb attach --index N`.

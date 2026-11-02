@@ -9,28 +9,28 @@ same trusted local network. It requires one small sheet, not a stress run.
   `192.168.100.0/24`, then install/repair the candidate and approve only its
   scoped firewall UAC prompt. Keep the Windows category Public; the rule must
   not apply to any other interface or remote subnet.
-- [ ] Confirm Windows has no `\PrintBridge\Agent` login task.
+- [ ] Confirm Windows has no `\QuireWire\Agent` login task.
 - [ ] Connect the second device to the same non-isolated LAN/Wi-Fi. Guest Wi-Fi,
   VPNs and routed subnets are outside the supported boundary.
 - [ ] Power on/connect the accepted USB printer.
 
 ## One-page gate
 
-1. Ensure PrintBridge is fully exited. Confirm no `printbridge-agent.exe` or
+1. Ensure QuireWire is fully exited. Confirm no `quirewire-agent.exe` or
    owned `VBoxHeadless.exe` remains and the phone cannot use the printer.
-2. Open PrintBridge. Wait for **Local network: Ready**. Confirm it shows
+2. Open QuireWire. Wait for **Local network: Ready**. Confirm it shows
    `Ethernet 3`, category `Public`, an address within `192.168.100.0/24`, and the
    IPP endpoint; do not record SSID or other sensitive data.
-3. On the second device, choose the discovered **Brother via PrintBridge**
+3. On the second device, choose the discovered **Brother via QuireWire**
    printer. Print one short text/PDF page.
 4. Owner confirms: the correct page physically printed once and is legible.
 5. Close the window with X. Confirm it hides to tray and the printer remains
    discoverable; no second sheet is needed.
-6. From the tray/settings choose **Exit PrintBridge (stop sharing)**. Allow up
+6. From the tray/settings choose **Exit QuireWire (stop sharing)**. Allow up
    to 90 seconds for graceful VM shutdown, then confirm:
-   - no PrintBridge agent remains;
+   - no QuireWire agent remains;
    - the exact owned VM is powered off;
-   - `printbridge-m10-lan-ipp` is absent from `VBoxManage showvminfo`;
+   - `quirewire-m10-lan-ipp` is absent from `VBoxManage showvminfo`;
    - the phone can no longer use the advertised printer.
 
 ## Scope check (no paper)

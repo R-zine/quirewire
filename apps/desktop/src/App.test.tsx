@@ -2,26 +2,26 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import { FakePrintBridgeClient } from "./fakeClient";
+import { FakeQuireWireClient } from "./fakeClient";
 import { ClientError } from "./types";
 
-function renderApp(client = new FakePrintBridgeClient()) {
+function renderApp(client = new FakeQuireWireClient()) {
   return render(<App client={client} pollIntervalMs={0} tauriEvents={false} />);
 }
 
-describe("PrintBridge desktop flows", () => {
+describe("QuireWire desktop flows", () => {
   it("renders real component-level status from the client", async () => {
     renderApp();
     expect(await screen.findByRole("heading", { name: "Ready to print" })).toBeTruthy();
     for (const name of ["VirtualBox", "Linux guest", "USB printer", "CUPS", "Windows queue", "eSCL scanner", "Local network"]) {
       expect(screen.getByRole("heading", { name })).toBeTruthy();
     }
-    expect(screen.getByText("Brother via PrintBridge is available to Windows and trusted local-network devices.")).toBeTruthy();
+    expect(screen.getByText("Brother via QuireWire is available to Windows and trusted local-network devices.")).toBeTruthy();
   });
 
   it("requires explicit whole-device consent before setup", async () => {
     const user = userEvent.setup();
-    const client = FakePrintBridgeClient.notConfigured();
+    const client = FakeQuireWireClient.notConfigured();
     renderApp(client);
     await screen.findByRole("heading", { name: "Not Configured" });
     await user.click(screen.getByRole("button", { name: /^Setup/ }));
@@ -40,7 +40,7 @@ describe("PrintBridge desktop flows", () => {
 
   it("submits a test page without claiming physical output", async () => {
     const user = userEvent.setup();
-    const client = new FakePrintBridgeClient();
+    const client = new FakeQuireWireClient();
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: "Print a test page" }));
@@ -53,7 +53,7 @@ describe("PrintBridge desktop flows", () => {
 
   it("shows live scanner capabilities and opens the fixed local scanner", async () => {
     const user = userEvent.setup();
-    const client = new FakePrintBridgeClient();
+    const client = new FakeQuireWireClient();
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Scan/ }));
@@ -68,7 +68,7 @@ describe("PrintBridge desktop flows", () => {
 
   it("runs repair and exports redacted diagnostics", async () => {
     const user = userEvent.setup();
-    const client = new FakePrintBridgeClient();
+    const client = new FakeQuireWireClient();
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Diagnostics/ }));
@@ -93,25 +93,25 @@ describe("PrintBridge desktop flows", () => {
 
   it("makes explicit exit stop the on-demand bridge", async () => {
     const user = userEvent.setup();
-    const client = new FakePrintBridgeClient();
+    const client = new FakeQuireWireClient();
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Settings/ }));
     expect(screen.getByRole("button", { name: "Stop engine" })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Exit PrintBridge" }));
-    expect(client.calls).toContain("exitPrintBridge");
+    await user.click(screen.getByRole("button", { name: "Exit QuireWire" }));
+    expect(client.calls).toContain("exitQuireWire");
     expect(client.calls).not.toContain("stop");
-    expect(screen.getByRole("heading", { name: "Closing PrintBridge…" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Closing QuireWire…" })).toBeTruthy();
     expect(screen.getByText(/This window will close automatically/)).toBeTruthy();
   });
 
   it("returns from the closing state when shutdown fails", async () => {
     const user = userEvent.setup();
-    const client = new FakePrintBridgeClient();
-    client.exitPrintBridge = vi.fn(async () => {
+    const client = new FakeQuireWireClient();
+    client.exitQuireWire = vi.fn(async () => {
       throw new ClientError({
         code: "shutdown_failed",
-        message: "PrintBridge could not finish shutting down",
+        message: "QuireWire could not finish shutting down",
         action: "Try Exit again.",
         retryable: true,
       });
@@ -119,19 +119,19 @@ describe("PrintBridge desktop flows", () => {
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Settings/ }));
-    await user.click(screen.getByRole("button", { name: "Exit PrintBridge" }));
+    await user.click(screen.getByRole("button", { name: "Exit QuireWire" }));
 
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByText("Try Exit again.")).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Closing PrintBridge…" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Closing QuireWire…" })).toBeNull();
   });
 
   it("shows an actionable error state when the agent is unavailable", async () => {
-    const client = new FakePrintBridgeClient();
+    const client = new FakeQuireWireClient();
     client.getStatus = vi.fn(async () => {
       throw new ClientError({
         code: "agent_unavailable",
-        message: "Cannot reach the PrintBridge agent",
+        message: "Cannot reach the QuireWire agent",
         action: "Run the startup task and try again.",
         retryable: true,
       });
@@ -143,7 +143,7 @@ describe("PrintBridge desktop flows", () => {
   });
 
   it("keeps stop behind a confirmation prompt", async () => {
-    const client = new FakePrintBridgeClient();
+    const client = new FakeQuireWireClient();
     vi.spyOn(window, "confirm").mockReturnValue(false);
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });

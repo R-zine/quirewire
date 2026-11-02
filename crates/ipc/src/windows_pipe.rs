@@ -24,7 +24,7 @@ use crate::{RequestEnvelope, ResponseEnvelope, WireError, read_response, write_r
 
 const SDDL_REVISION_1: u32 = 1;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-pub const PIPE_PREFIX: &str = r"\\.\pipe\PrintBridge-Agent-v4-";
+pub const PIPE_PREFIX: &str = r"\\.\pipe\QuireWire-Agent-v4-";
 
 #[derive(Debug, Clone)]
 pub struct SecurePipeFactory {

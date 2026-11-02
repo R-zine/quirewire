@@ -16,11 +16,11 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 Read-only LAN policy status:
 
 ```powershell
-$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
+$root = Join-Path $env:LOCALAPPDATA 'QuireWire'
 $config = Get-Content -LiteralPath "$root\m6.conf" | ConvertFrom-StringData
 & "$root\scripts\m10\windows\Invoke-M10LanSharing.ps1" `
   -Action Status -OwnerToken $config.vm_uuid -IppPort ([int]$config.endpoint_port) `
-  -AgentExecutable "$root\bin\printbridge-agent.exe" `
+  -AgentExecutable "$root\bin\quirewire-agent.exe" `
   -VBoxHeadlessExecutable "$env:ProgramFiles\Oracle\VirtualBox\VBoxHeadless.exe" `
   -ApprovedInterfaceAlias $config.lan_interface_alias `
   -ApprovedSubnet $config.lan_subnet
@@ -35,14 +35,14 @@ Read-only live protocol checks after status reaches Ready:
 $LanAddress = '192.168.100.72' # copy the current address from CLI status
 & "$root\scripts\m10\windows\Test-M10LanIpp.ps1" `
   -Address $LanAddress -Port ([int]$config.endpoint_port)
-$DnsSdResult = Join-Path $env:TEMP 'printbridge-m10-dnssd.txt'
-$diagnostic = Start-Process -FilePath "$root\bin\printbridge-agent.exe" -Wait -PassThru `
+$DnsSdResult = Join-Path $env:TEMP 'quirewire-m10-dnssd.txt'
+$diagnostic = Start-Process -FilePath "$root\bin\quirewire-agent.exe" -Wait -PassThru `
   -ArgumentList @('diagnose-lan', $LanAddress, $config.endpoint_port, '--output', $DnsSdResult)
-if ($diagnostic.ExitCode -ne 0) { throw 'PrintBridge DNS-SD resolution failed.' }
+if ($diagnostic.ExitCode -ne 0) { throw 'QuireWire DNS-SD resolution failed.' }
 Get-Content -LiteralPath $DnsSdResult
 ```
 
-Use the address reported by `printbridgectl status`; the reference address is
+Use the address reported by `quirewirectl status`; the reference address is
 shown only as an example. The DNS-SD command must run from the installed agent
 path because the exact-program firewall deliberately excludes arbitrary tools.
 It writes an explicit result file because the release agent is deliberately a

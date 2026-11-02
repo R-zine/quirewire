@@ -27,11 +27,11 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$protocol = 'PRINTBRIDGE_LAN_V2'
-$marker = "printbridge.m10.firewall.v1 owner $($OwnerToken.ToLowerInvariant())"
-$ippRuleName = "PrintBridge $($OwnerToken.ToLowerInvariant()) LAN IPP"
-$scanRuleName = "PrintBridge $($OwnerToken.ToLowerInvariant()) LAN eSCL"
-$mdnsRuleName = "PrintBridge $($OwnerToken.ToLowerInvariant()) LAN mDNS"
+$protocol = 'QUIREWIRE_LAN_V2'
+$marker = "quirewire.m10.firewall.v1 owner $($OwnerToken.ToLowerInvariant())"
+$ippRuleName = "QuireWire $($OwnerToken.ToLowerInvariant()) LAN IPP"
+$scanRuleName = "QuireWire $($OwnerToken.ToLowerInvariant()) LAN eSCL"
+$mdnsRuleName = "QuireWire $($OwnerToken.ToLowerInvariant()) LAN mDNS"
 
 function ConvertTo-Field([AllowEmptyString()][string]$Value) {
     [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value))
@@ -179,7 +179,7 @@ function Get-ExactRule([string]$Name) {
     }
     if ($rules.Count -eq 0) { return $null }
     if ($rules[0].Description -ne $marker) {
-        throw "Firewall rule '$Name' does not have the exact PrintBridge ownership marker."
+        throw "Firewall rule '$Name' does not have the exact QuireWire ownership marker."
     }
     $rules[0]
 }
@@ -228,7 +228,7 @@ function Install-ExactRule(
     if (-not (Test-Path -LiteralPath $resolvedProgram -PathType Leaf)) {
         throw "Firewall program does not exist: $resolvedProgram"
     }
-    New-NetFirewallRule -DisplayName $Name -Description $marker -Group 'PrintBridge' `
+    New-NetFirewallRule -DisplayName $Name -Description $marker -Group 'QuireWire' `
         -Direction Inbound -Action Allow -Enabled True -Profile Private,Public `
         -InterfaceAlias $ApprovedInterfaceAlias -RemoteAddress $ApprovedSubnet `
         -Protocol $Protocol -LocalPort $Port -Program $resolvedProgram | Out-Null
@@ -268,7 +268,7 @@ try {
         (Test-Rule $mdnsRuleName UDP 5353 $AgentExecutable)
     $reason = if (-not $lan.available) { $lan.reason }
     elseif (-not $firewallReady) {
-        'LAN sharing is off because the exact interface/subnet firewall rules are not installed. Run PrintBridge Repair and approve the scoped elevation.'
+        'LAN sharing is off because the exact interface/subnet firewall rules are not installed. Run QuireWire Repair and approve the scoped elevation.'
     }
     else { 'The explicitly approved local subnet and exact firewall rules are ready.' }
     Write-Record $true ($lan.available -and $firewallReady) $lan.interface_alias `

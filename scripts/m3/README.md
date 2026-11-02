@@ -5,19 +5,19 @@ bounded timeouts. It never authorizes a VM by display name: every lifecycle or
 USB mutation requires a canonical UUID plus both live extra-data values:
 
 ```text
-PrintBridge/Schema=printbridge.m3.owned-vm.v1
-PrintBridge/Owner=<the marker in the selected configuration>
+QuireWire/Schema=quirewire.m3.owned-vm.v1
+QuireWire/Owner=<the marker in the selected configuration>
 ```
 
 ## Configuration
 
-Pass `--config <path>` or set `PRINTBRIDGE_M3_CONFIG`. If neither is supplied,
-the CLI reads `%LOCALAPPDATA%\PrintBridge\m3.conf` when that file exists.
+Pass `--config <path>` or set `QUIREWIRE_M3_CONFIG`. If neither is supplied,
+the CLI reads `%LOCALAPPDATA%\QuireWire\m3.conf` when that file exists.
 
 ```text
-schema=printbridge.m3.config.v1
+schema=quirewire.m3.config.v1
 vm_uuid=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-vm_marker=printbridge.m3.owner-generated-marker
+vm_marker=quirewire.m3.owner-generated-marker
 usb_vendor_id=04f9
 usb_product_id=0567
 usb_serial=owner-selected-serial-when-present
@@ -30,8 +30,8 @@ device identifier. CLI output and structured trace output never reveal it.
 
 ```powershell
 cargo test --workspace --all-features
-cargo run --quiet -p printbridgectl -- doctor
-cargo run --quiet -p printbridgectl -- usb list
+cargo run --quiet -p quirewirectl -- doctor
+cargo run --quiet -p quirewirectl -- usb list
 powershell.exe -NoProfile -File tests/m3/Invoke-M3WindowsIntegration.ps1 `
   -SourceVmUuid <closed-source-uuid>
 ```

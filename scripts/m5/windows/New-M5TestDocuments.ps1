@@ -16,7 +16,7 @@ if ($existing.Count -gt 0) {
     if (Test-Path -LiteralPath $manifestPath) {
         try {
             $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-            $owned = $manifest.schema -eq 'printbridge.m5.test-documents.v1'
+            $owned = $manifest.schema -eq 'quirewire.m5.test-documents.v1'
         }
         catch { $owned = $false }
     }
@@ -84,14 +84,14 @@ $content = @"
 BT
 /F1 20 Tf
 72 730 Td
-(PrintBridge M5 standard-application PDF test) Tj
+(QuireWire M5 standard-application PDF test) Tj
 /F1 11 Tf
 0 -25 Td
 (Windows PDF viewer -> Microsoft IPP Class Driver -> CUPS -> USB printer) Tj
 0 -18 Td
 (Generated UTC: $escapedTime) Tj
 0 -18 Td
-(Acceptance token: PRINTBRIDGE-M5-PDF-IMAGE-2026) Tj
+(Acceptance token: QUIREWIRE-M5-PDF-IMAGE-2026) Tj
 ET
 q
 210 0 0 210 72 410 cm
@@ -115,11 +115,11 @@ $objects = @(
 Write-SimplePdf -Path (Join-Path $OutputDirectory 'm5-standard-app-pdf.pdf') -Objects $objects
 
 [ordered]@{
-    schema = 'printbridge.m5.test-documents.v1'
+    schema = 'quirewire.m5.test-documents.v1'
     generatedUtc = $generatedUtc
     files = @(
-        [ordered]@{ name = 'm5-standard-app-text.txt'; token = 'PRINTBRIDGE-M5-TEXT-2026'; application = 'Notepad' },
-        [ordered]@{ name = 'm5-standard-app-pdf.pdf'; token = 'PRINTBRIDGE-M5-PDF-IMAGE-2026'; application = 'normal PDF viewer' }
+        [ordered]@{ name = 'm5-standard-app-text.txt'; token = 'QUIREWIRE-M5-TEXT-2026'; application = 'Notepad' },
+        [ordered]@{ name = 'm5-standard-app-pdf.pdf'; token = 'QUIREWIRE-M5-PDF-IMAGE-2026'; application = 'normal PDF viewer' }
     )
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 

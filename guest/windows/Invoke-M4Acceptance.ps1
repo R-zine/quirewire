@@ -70,9 +70,9 @@ function Get-VmProperty {
 
 function Assert-OwnedVm {
     param([string]$Vm, [string]$Marker)
-    $schema = Invoke-VBox -Arguments @('getextradata', $Vm, 'PrintBridge/Schema')
-    $owner = Invoke-VBox -Arguments @('getextradata', $Vm, 'PrintBridge/Owner')
-    if (($schema -join "`n") -notmatch 'Value: printbridge\.m4\.acceptance-vm\.v1' -or
+    $schema = Invoke-VBox -Arguments @('getextradata', $Vm, 'QuireWire/Schema')
+    $owner = Invoke-VBox -Arguments @('getextradata', $Vm, 'QuireWire/Owner')
+    if (($schema -join "`n") -notmatch 'Value: quirewire\.m4\.acceptance-vm\.v1' -or
         ($owner -join "`n") -notmatch "Value: $([regex]::Escape($Marker))") {
         throw 'Refusing to manage a VM without the exact M4 acceptance ownership marker.'
     }
@@ -122,7 +122,7 @@ function Wait-TcpPort {
 
 function Invoke-Ssh {
     param([string]$Command)
-    $arguments = @('-i', $SshPrivateKeyPath, '-p', "$SshPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', "UserKnownHostsFile=$knownHostsPath", 'printbridge@127.0.0.1', $Command)
+    $arguments = @('-i', $SshPrivateKeyPath, '-p', "$SshPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', "UserKnownHostsFile=$knownHostsPath", 'quirewire@127.0.0.1', $Command)
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -143,24 +143,24 @@ if (-not (Get-Command ssh.exe -ErrorAction SilentlyContinue)) { throw 'Windows O
 if (-not (Get-Command scp.exe -ErrorAction SilentlyContinue)) { throw 'Windows OpenSSH scp client is required.' }
 if (-not (Get-Command cargo.exe -ErrorAction SilentlyContinue)) { throw 'Rust cargo is required to run the real M4 IPP provider probe.' }
 
-$marker = "printbridge.m4.acceptance.$([guid]::NewGuid())"
-$name = "PrintBridge-M4-Acceptance-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+$marker = "quirewire.m4.acceptance.$([guid]::NewGuid())"
+$name = "QuireWire-M4-Acceptance-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
 $machineFolder = Join-Path $OutputDirectory 'vm'
 [IO.Directory]::CreateDirectory($machineFolder) | Out-Null
 Write-Evidence 'Importing a fresh configured OVA into a new owned VM.'
 Invoke-VBox -Arguments @('import', [IO.Path]::GetFullPath($ConfiguredOvaPath), '--options=importtovdi', '--vsys=0', "--vmname=$name", "--basefolder=$machineFolder", '--memory=768', '--cpus=1') | Out-Null
 $vm = Get-VmProperty $name 'UUID'
-Invoke-VBox -Arguments @('setextradata', $vm, 'PrintBridge/Schema', 'printbridge.m4.acceptance-vm.v1') | Out-Null
-Invoke-VBox -Arguments @('setextradata', $vm, 'PrintBridge/Owner', $marker) | Out-Null
+Invoke-VBox -Arguments @('setextradata', $vm, 'QuireWire/Schema', 'quirewire.m4.acceptance-vm.v1') | Out-Null
+Invoke-VBox -Arguments @('setextradata', $vm, 'QuireWire/Owner', $marker) | Out-Null
 Assert-OwnedVm $vm $marker
 
 Invoke-VBox -Arguments @('modifyvm', $vm, '--nic1', 'nat', '--audio-enabled', 'off', '--clipboard-mode', 'disabled', '--drag-and-drop', 'disabled', '--usb-ohci', 'on', '--usb-ehci', 'off', '--usb-xhci', 'off', '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none') | Out-Null
-Invoke-VBox -Arguments @('modifyvm', $vm, '--nat-pf1', "printbridge-m4-ssh,tcp,127.0.0.1,$SshPort,,22") | Out-Null
-Invoke-VBox -Arguments @('modifyvm', $vm, '--nat-pf1', "printbridge-m4-ipp,tcp,127.0.0.1,$IppPort,,631") | Out-Null
+Invoke-VBox -Arguments @('modifyvm', $vm, '--nat-pf1', "quirewire-m4-ssh,tcp,127.0.0.1,$SshPort,,22") | Out-Null
+Invoke-VBox -Arguments @('modifyvm', $vm, '--nat-pf1', "quirewire-m4-ipp,tcp,127.0.0.1,$IppPort,,631") | Out-Null
 Invoke-VBox -Arguments @('storageattach', $vm, '--storagectl', 'SATA Controller', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', [IO.Path]::GetFullPath($DriverMediaPath)) | Out-Null
 
 $usb = Get-ExactUsb
-$filter = @('usbfilter', 'add', '0', '--target', $vm, '--name', 'PrintBridge M4 acceptance exact Brother', '--active', 'yes', '--vendorid', '04f9', '--productid', '0567', '--remote', 'no')
+$filter = @('usbfilter', 'add', '0', '--target', $vm, '--name', 'QuireWire M4 acceptance exact Brother', '--active', 'yes', '--vendorid', '04f9', '--productid', '0567', '--remote', 'no')
 if ($usb.Serial) { $filter += @('--serialnumber', $usb.Serial) }
 Invoke-VBox -Arguments $filter -SensitiveOutput | Out-Null
 
@@ -180,7 +180,7 @@ do {
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $ippProbe = @(& cargo.exe run --quiet -p printbridge-provider-cups --example m4_probe -- "$IppPort" PrintBridge_DCP_L2600D 2>&1 | ForEach-Object { $_.ToString() })
+        $ippProbe = @(& cargo.exe run --quiet -p quirewire-provider-cups --example m4_probe -- "$IppPort" QuireWire_DCP_L2600D 2>&1 | ForEach-Object { $_.ToString() })
         $ippProbeCode = $LASTEXITCODE
     }
     finally {
@@ -194,7 +194,7 @@ $ippProbeText = $ippProbe -join "`n"
 if ($ippProbeText -notmatch '(?m)^ipp=pass$' -or $ippProbeText -notmatch '(?m)^state=ready$') {
     throw 'Real host IPP provider did not report a ready queue.'
 }
-$health = Invoke-Ssh '/usr/local/sbin/printbridge-health --diagnostics'
+$health = Invoke-Ssh '/usr/local/sbin/quirewire-health --diagnostics'
 $health | Set-Content -LiteralPath (Join-Path $OutputDirectory 'guest-diagnostics.txt') -Encoding UTF8
 $healthText = $health -join "`n"
 foreach ($requiredHealth in @('cups=active', 'queue=idle', 'accepting=yes', 'ipp=pass', 'usb=present', 'driver_mode=official-brother', 'physical_output=not_inferred')) {
@@ -210,7 +210,7 @@ if ($SubmitPhysicalPage) {
     $staged = Join-Path $OutputDirectory "m4-appliance-physical-test-$token.txt"
     (Get-Content -Raw -LiteralPath $source).Replace('The unique run token is recorded in the local M4 acceptance evidence.', "Run token: $token") |
         Set-Content -LiteralPath $staged -Encoding UTF8
-    $scpArgs = @('-i', $SshPrivateKeyPath, '-P', "$SshPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', "UserKnownHostsFile=$knownHostsPath", $staged, 'printbridge@127.0.0.1:/tmp/m4-physical-test.txt')
+    $scpArgs = @('-i', $SshPrivateKeyPath, '-P', "$SshPort", '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', "UserKnownHostsFile=$knownHostsPath", $staged, 'quirewire@127.0.0.1:/tmp/m4-physical-test.txt')
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -221,17 +221,17 @@ if ($SubmitPhysicalPage) {
         $ErrorActionPreference = $previousPreference
     }
     if ($scpCode -ne 0) { throw 'Failed to stage the M4 physical test page through loopback SSH.' }
-    $jobOutput = Invoke-Ssh "lp -d PrintBridge_DCP_L2600D -t '$token' /tmp/m4-physical-test.txt"
+    $jobOutput = Invoke-Ssh "lp -d QuireWire_DCP_L2600D -t '$token' /tmp/m4-physical-test.txt"
     $job = ($jobOutput -join ' ').Trim()
     Write-Evidence "Submitted physical page $token; CUPS response recorded."
     Start-Sleep -Seconds 8
-    $postHealth = Invoke-Ssh '/usr/local/sbin/printbridge-health --health'
+    $postHealth = Invoke-Ssh '/usr/local/sbin/quirewire-health --health'
     if (($postHealth -join "`n") -notmatch '(?m)^queue=idle$') { throw 'CUPS did not return to idle after the acceptance submission.' }
     Write-Evidence 'CUPS returned to idle; physical output remains owner-confirmed only.'
 }
 
 $state = [ordered]@{
-    schema = 'printbridge.m4.acceptance-state.v1'
+    schema = 'quirewire.m4.acceptance-state.v1'
     result = if ($SubmitPhysicalPage) { 'BLOCKED: OWNER PHYSICAL CONFIRMATION' } else { 'PASS: SOFTWARE ONLY' }
     vm_uuid = $vm
     ownership_marker = $marker

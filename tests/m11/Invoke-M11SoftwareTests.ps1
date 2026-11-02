@@ -122,13 +122,13 @@ Check 'guest access is exact-device, unprivileged, host-discovery-only, and cont
     $provision -notmatch 'scanimage.*--format'
 }
 Check 'offline clone repair proves ownership and does not retain source packages' {
-    $repair -match 'PRINTBRIDGE_GUEST_SCHEMA=printbridge\.m4\.guest\.v1' -and
-    $repair -match 'QUEUE_NAME=PrintBridge_DCP_L2600D' -and
+    $repair -match 'QUIREWIRE_GUEST_SCHEMA=quirewire\.m4\.guest\.v1' -and
+    $repair -match 'QUEUE_NAME=QuireWire_DCP_L2600D' -and
     $repair -match '--offline' -and
     $repair -match 'rm -rf --one-file-system "\$input"' -and
-    $debugClone -match 'PRINTBRIDGE_GUEST_SCHEMA=printbridge\.m4\.guest\.v1' -and
-    $debugClone -match 'QUEUE_NAME=PrintBridge_DCP_L2600D' -and
-    $debugClone -match 'printbridge\.m11\.debug-clone\.v1' -and
+    $debugClone -match 'QUIREWIRE_GUEST_SCHEMA=quirewire\.m4\.guest\.v1' -and
+    $debugClone -match 'QUEUE_NAME=QuireWire_DCP_L2600D' -and
+    $debugClone -match 'quirewire\.m11\.debug-clone\.v1' -and
     $debugClone -match 'airsaned-debug\.log'
 }
 Check 'eSCL probe is loopback-only, bounded, timeout-controlled, and rejects XML entities' {
@@ -146,10 +146,10 @@ Check 'protocol v7 exposes capabilities without scan bytes' {
     $agent -match 'Scan documents and image bytes never pass through agent IPC'
 }
 Check 'VirtualBox owns distinct loopback and LAN eSCL forwards' {
-    $virtualbox -match 'printbridge-m11-escl' -and
-    $virtualbox -match 'printbridge-m11-lan-escl' -and
-    $virtualbox -match 'printbridge\.m11\.scan-loopback\.v1' -and
-    $virtualbox -match 'printbridge\.m11\.scan-lan\.v1' -and
+    $virtualbox -match 'quirewire-m11-escl' -and
+    $virtualbox -match 'quirewire-m11-lan-escl' -and
+    $virtualbox -match 'quirewire\.m11\.scan-loopback\.v1' -and
+    $virtualbox -match 'quirewire\.m11\.scan-lan\.v1' -and
     $agent -match 'GUEST_SCANNER_PORT: u16 = 8090'
 }
 Check 'LAN scan firewall and DNS-SD require separate exact-port approval' {
@@ -181,10 +181,10 @@ Check 'installer packages scanning diagnostics and preserves scoped elevation' {
 }
 Check 'lifecycle removes only exact non-default legacy milestone queues' {
     $lifecycle -match 'function Remove-LegacyOwnedQueues' -and
-    $lifecycle -match 'Brother via PrintBridge POC' -and
-    $lifecycle -match 'PrintBridge M0 feasibility POC - owned by Manage-M0IppPrinter\.ps1' -and
-    $lifecycle -match 'Brother via PrintBridge M1' -and
-    $lifecycle -match 'PrintBridge M1 manual spike - owned by Manage-M1IppPrinter\.ps1' -and
+    $lifecycle -match 'Brother via QuireWire POC' -and
+    $lifecycle -match 'QuireWire M0 feasibility POC - owned by Manage-M0IppPrinter\.ps1' -and
+    $lifecycle -match 'Brother via QuireWire M1' -and
+    $lifecycle -match 'QuireWire M1 manual spike - owned by Manage-M1IppPrinter\.ps1' -and
     $lifecycle -match '\$queue\.DriverName -ne ''Microsoft IPP Class Driver''' -and
     $lifecycle -match '\$queue\.PortName -notlike ''WSD-\*''' -and
     $lifecycle -match '\[bool\]\$cimPrinter\.Default' -and

@@ -34,7 +34,7 @@ while ($stopwatch.Elapsed.TotalSeconds -lt $DurationSeconds) {
 }
 
 [ordered]@{
-    schema = 'printbridge.m8.process-start-trace.v1'
+    schema = 'quirewire.m8.process-start-trace.v1'
     started_utc = [DateTime]::UtcNow.AddSeconds(-$stopwatch.Elapsed.TotalSeconds).ToString('o')
     completed_utc = [DateTime]::UtcNow.ToString('o')
     duration_seconds = $DurationSeconds

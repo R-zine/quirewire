@@ -58,7 +58,7 @@ else {
 }
 
 $report = [ordered]@{
-    schema = 'printbridge.m1.acceptance.v1'
+    schema = 'quirewire.m1.acceptance.v1'
     recordedUtc = [DateTime]::UtcNow.ToString('o')
     result = $result
     vmUuid = $VmUuid.ToLowerInvariant()
@@ -81,7 +81,7 @@ $rows = foreach ($entry in $checks.GetEnumerator()) {
     "| $($entry.Key) | $($entry.Value) |"
 }
 @"
-# PrintBridge M1 physical acceptance
+# QuireWire M1 physical acceptance
 
 - Recorded UTC: $($report.recordedUtc)
 - Result: **$result**

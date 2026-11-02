@@ -16,11 +16,11 @@ $ErrorActionPreference = 'Stop'
 $configPathFull = [IO.Path]::GetFullPath($ConfigPath)
 
 if (-not (Test-Path -LiteralPath $configPathFull -PathType Leaf)) {
-    throw "PrintBridge configuration does not exist: $configPathFull"
+    throw "QuireWire configuration does not exist: $configPathFull"
 }
 
 $lines = @([IO.File]::ReadAllLines($configPathFull))
-if ($lines -notcontains 'schema=printbridge.m6.config.v1') {
+if ($lines -notcontains 'schema=quirewire.m6.config.v1') {
     throw 'The configuration schema is not the supported owner-protected M6 schema.'
 }
 $aliases = @($lines | Where-Object { $_ -like 'lan_interface_alias=*' })
@@ -31,7 +31,7 @@ if ($aliases.Count -gt 1 -or $subnets.Count -gt 1 -or $aliases.Count -ne $subnet
 
 if ($Action -eq 'Status') {
     [pscustomobject]@{
-        schema = 'printbridge.m10.lan-approval.v1'
+        schema = 'quirewire.m10.lan-approval.v1'
         approved = $aliases.Count -eq 1
         interface_alias = if ($aliases.Count) { $aliases[0].Substring('lan_interface_alias='.Length) } else { $null }
         subnet = if ($subnets.Count) { $subnets[0].Substring('lan_subnet='.Length) } else { $null }
@@ -74,7 +74,7 @@ finally {
 }
 
 [pscustomobject]@{
-    schema = 'printbridge.m10.lan-approval.v1'
+    schema = 'quirewire.m10.lan-approval.v1'
     action = $Action
     approved = $Action -eq 'Approve'
     interface_alias = if ($Action -eq 'Approve') { $InterfaceAlias } else { $null }

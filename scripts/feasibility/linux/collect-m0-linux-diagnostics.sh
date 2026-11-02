@@ -102,7 +102,7 @@ run_shell_readonly() {
 }
 
 section 'scope and timestamp'
-printf 'Schema: printbridge.m0.linux-diagnostics.v1\n'
+printf 'Schema: quirewire.m0.linux-diagnostics.v1\n'
 printf 'Collected UTC: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 printf 'Queue requested: %s\n' "${queue:-<not specified>}"
 printf 'USB VID:PID requested: %s\n' "${usb_id:-<not specified>}"

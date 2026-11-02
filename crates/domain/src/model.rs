@@ -256,11 +256,11 @@ mod tests {
     fn windows_ipp_url_uses_the_stable_endpoint_and_queue() {
         let endpoint = PrinterEndpoint::Loopback {
             port: 8644,
-            queue: "PrintBridge_DCP_L2600D".into(),
+            queue: "QuireWire_DCP_L2600D".into(),
         };
         assert_eq!(
             endpoint.windows_ipp_url(),
-            "http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D"
+            "http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D"
         );
     }
 }

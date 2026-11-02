@@ -18,14 +18,14 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 function Read-Diagnostic([string]$Path, [string]$Phase) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Missing $Phase diagnostics." }
     $value = Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
-    if ($value.schema -ne 'printbridge.m8.diagnostics.v1' -or $value.phase -ne $Phase) {
+    if ($value.schema -ne 'quirewire.m8.diagnostics.v1' -or $value.phase -ne $Phase) {
         throw "The $Phase diagnostics have the wrong schema or phase."
     }
     $value
 }
 
 function Names-ExceptOwned([object]$Value) {
-    @($Value.printers | Where-Object { $_.name -ne 'Brother via PrintBridge' } | ForEach-Object { $_.name } | Sort-Object)
+    @($Value.printers | Where-Object { $_.name -ne 'Brother via QuireWire' } | ForEach-Object { $_.name } | Sort-Object)
 }
 
 function VmUuids([object]$Value) {
@@ -36,9 +36,9 @@ $baseline = Read-Diagnostic $BaselinePath 'Baseline'
 $installed = Read-Diagnostic $InstalledPath 'Installed'
 $repaired = Read-Diagnostic $RepairedPath 'Repaired'
 $uninstalled = Read-Diagnostic $UninstalledPath 'Uninstalled'
-$installedQueue = @($installed.printers | Where-Object { $_.name -eq 'Brother via PrintBridge' })
-$repairedQueue = @($repaired.printers | Where-Object { $_.name -eq 'Brother via PrintBridge' })
-$uninstalledQueue = @($uninstalled.printers | Where-Object { $_.name -eq 'Brother via PrintBridge' })
+$installedQueue = @($installed.printers | Where-Object { $_.name -eq 'Brother via QuireWire' })
+$repairedQueue = @($repaired.printers | Where-Object { $_.name -eq 'Brother via QuireWire' })
+$uninstalledQueue = @($uninstalled.printers | Where-Object { $_.name -eq 'Brother via QuireWire' })
 $unrelatedPrintersPreserved = ((Names-ExceptOwned $baseline) -join "`n") -eq ((Names-ExceptOwned $uninstalled) -join "`n")
 $unrelatedVmsPreserved = ((VmUuids $baseline) -join "`n") -eq ((VmUuids $uninstalled) -join "`n")
 
@@ -69,7 +69,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory "$stamp-m8-acceptance.json"
 [ordered]@{
-    schema = 'printbridge.m8.acceptance.v1'
+    schema = 'quirewire.m8.acceptance.v1'
     recorded_utc = [DateTime]::UtcNow.ToString('o')
     result = if ($passed) { 'PASS: PHYSICAL' } else { 'FAIL' }
     checks = $checks
@@ -80,5 +80,5 @@ $path = Join-Path $OutputDirectory "$stamp-m8-acceptance.json"
         uninstalled = (Resolve-Path -LiteralPath $UninstalledPath).Path
     }
 } | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $path -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m8.acceptance-result.v1'; result = if ($passed) { 'PASS: PHYSICAL' } else { 'FAIL' }; path = $path } | ConvertTo-Json
+[pscustomobject]@{ schema = 'quirewire.m8.acceptance-result.v1'; result = if ($passed) { 'PASS: PHYSICAL' } else { 'FAIL' }; path = $path } | ConvertTo-Json
 if (-not $passed) { exit 2 }

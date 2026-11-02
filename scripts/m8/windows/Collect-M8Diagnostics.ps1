@@ -4,7 +4,7 @@ param(
     [ValidateSet('Baseline', 'Installed', 'Repaired', 'Uninstalled', 'Reinstalled')]
     [string]$Phase,
     [string]$OutputDirectory,
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$VBoxManage = (Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe')
 )
 
@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
-$task = Get-ScheduledTask -TaskPath '\PrintBridge\' -TaskName 'Agent' -ErrorAction SilentlyContinue
+$task = Get-ScheduledTask -TaskPath '\QuireWire\' -TaskName 'Agent' -ErrorAction SilentlyContinue
 $defaultNames = @(Get-CimInstance Win32_Printer -ErrorAction Stop | Where-Object { [bool]$_.Default } | ForEach-Object { $_.Name })
 $printers = @(Get-Printer -ErrorAction Stop | Sort-Object Name | ForEach-Object {
     [ordered]@{ name = $_.Name; driver = $_.DriverName; port = $_.PortName; comment = $_.Comment; is_default = $_.Name -in $defaultNames }
@@ -29,7 +29,7 @@ if (Test-Path -LiteralPath $VBoxManage -PathType Leaf) {
     }
 }
 $manifestPath = Join-Path $DataRoot 'installation.json'
-$appPath = Join-Path $DataRoot 'printbridge-desktop.exe'
+$appPath = Join-Path $DataRoot 'quirewire-desktop.exe'
 $uninstallerPath = Join-Path $DataRoot 'uninstall.exe'
 $manifest = $null
 if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
@@ -46,7 +46,7 @@ if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
 }
 
 $record = [ordered]@{
-    schema = 'printbridge.m8.diagnostics.v1'
+    schema = 'quirewire.m8.diagnostics.v1'
     captured_utc = [DateTime]::UtcNow.ToString('o')
     phase = $Phase
     owner_sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -72,10 +72,10 @@ $record = [ordered]@{
     log_directory_present = Test-Path -LiteralPath (Join-Path $DataRoot 'logs') -PathType Container
     app_executable_present = Test-Path -LiteralPath $appPath -PathType Leaf
     uninstaller_present = Test-Path -LiteralPath $uninstallerPath -PathType Leaf
-    uninstall_registration_present = Test-Path -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\PrintBridge'
+    uninstall_registration_present = Test-Path -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\QuireWire'
 }
 
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory "$stamp-$($Phase.ToLowerInvariant()).json"
 $record | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $path -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m8.diagnostics-result.v1'; path = $path; phase = $Phase } | ConvertTo-Json
+[pscustomobject]@{ schema = 'quirewire.m8.diagnostics-result.v1'; path = $path; phase = $Phase } | ConvertTo-Json

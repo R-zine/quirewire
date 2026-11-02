@@ -101,8 +101,8 @@ Check 'CUPS sharing forbids remote admin and remote-any' {
 }
 Check 'CUPS LAN access is limited to the owned print queue' {
     $policy = Get-Content -Raw (Join-Path $repositoryRoot 'guest\linux\configure-lan-cups.sh')
-    Require ($policy.Contains('<Location /printers/PrintBridge_DCP_L2600D>')) 'owned queue location absent'
-    Require ($policy.Contains('ServerAlias printbridge-m4.local')) 'fixed advertised alias absent'
+    Require ($policy.Contains('<Location /printers/QuireWire_DCP_L2600D>')) 'owned queue location absent'
+    Require ($policy.Contains('ServerAlias quirewire-m4.local')) 'fixed advertised alias absent'
     Require (-not $policy.Contains('<Location />')) 'root CUPS location was exposed'
     Require (-not $policy.Contains('<Location /admin>')) 'CUPS administration was exposed'
 }
@@ -130,7 +130,7 @@ Check 'Open-driver media is source-only and contains no Brother binary mapping' 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repositoryRoot 'guest\windows\New-M4DriverMedia.ps1') -Mode open-brlaser -OutputDirectory $openOut | Out-Null
     Require ($LASTEXITCODE -eq 0) 'open driver media builder failed'
     $manifest = Get-Content -Raw (Join-Path $openOut 'manifest-open-brlaser.env')
-    $viso = Get-Content -Raw (Join-Path $openOut 'printbridge-m4-open-brlaser.viso')
+    $viso = Get-Content -Raw (Join-Path $openOut 'quirewire-m4-open-brlaser.viso')
     Require ($manifest.Contains('DRIVER_MODE=open-brlaser')) 'open mode absent'
     Require (-not $viso.Contains('.deb')) 'open media unexpectedly maps a vendor binary'
 }
@@ -155,7 +155,7 @@ Check 'Appliance builder rejects an unpinned ISO before creating a VM' {
 Check 'Acceptance recorder refuses software-only state' {
     $statePath = Join-Path $evidence 'software-only-state.json'
     [ordered]@{
-        schema = 'printbridge.m4.acceptance-state.v1'; fresh_ova_import = $true
+        schema = 'quirewire.m4.acceptance-state.v1'; fresh_ova_import = $true
         idempotent_reprovision = $true; cups_health = 'pass'; physical_token = $null
     } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8
     $previousPreference = $ErrorActionPreference
@@ -175,7 +175,7 @@ Check 'No restricted appliance or driver binary is tracked' {
 }
 
 $summary = [ordered]@{
-    schema = 'printbridge.m4.software-tests.v1'
+    schema = 'quirewire.m4.software-tests.v1'
     result = if ($failed -eq 0) { 'PASS: SOFTWARE ONLY' } else { 'FAIL' }
     passed = $passed
     failed = $failed

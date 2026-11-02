@@ -90,7 +90,7 @@ try {
     $pdfPath = Join-Path $documentsDirectory 'm0-pdf-image-test.pdf'
     $duplexPath = Join-Path $documentsDirectory 'm0-duplex-color-test.pdf'
     Assert-Test -Condition (Test-Path -LiteralPath $textPath) -Name 'Text fixture generated' -Detail $textPath
-    Assert-Test -Condition ((Get-Content -Raw -LiteralPath $textPath) -match 'PRINTBRIDGE-M0-TEXT-2026') -Name 'Text fixture token' -Detail 'Known physical token is present'
+    Assert-Test -Condition ((Get-Content -Raw -LiteralPath $textPath) -match 'QUIREWIRE-M0-TEXT-2026') -Name 'Text fixture token' -Detail 'Known physical token is present'
 
     foreach ($path in @($pdfPath, $duplexPath)) {
         $bytes = [System.IO.File]::ReadAllBytes($path)
@@ -114,7 +114,7 @@ try {
     Assert-Test -Condition ($collisionExitCode -ne 0) -Name 'Fixture collision refusal' -Detail 'Generator rejected an unowned target filename'
     Assert-Test -Condition ((Get-Content -Raw -LiteralPath $collisionPath).Trim() -eq 'UNOWNED-SENTINEL') -Name 'Unowned file preserved' -Detail 'Collision sentinel was not overwritten'
 
-    $dryRunName = "PrintBridge M0 Dry Run $([guid]::NewGuid().ToString('N'))"
+    $dryRunName = "QuireWire M0 Dry Run $([guid]::NewGuid().ToString('N'))"
     $dryRunEvidence = Join-Path $testOutput 'manage-dry-run'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\scripts\feasibility\windows\Manage-M0IppPrinter.ps1' `
         -Action Register -PrinterName $dryRunName -IppUrl 'ipp://192.0.2.1:631/printers/example' -EvidenceDirectory $dryRunEvidence | Out-Null
@@ -132,7 +132,7 @@ try {
     Assert-Test -Condition ($acceptance.result -eq 'BLOCKED: REQUIRES HARDWARE') -Name 'No synthetic physical pass' -Detail $acceptance.result
 
     $report = [ordered]@{
-        schema = 'printbridge.m0.software-tests.v1'
+        schema = 'quirewire.m0.software-tests.v1'
         completedUtc = [DateTime]::UtcNow.ToString('o')
         result = 'PASS: SOFTWARE ONLY'
         physicalAcceptance = 'NOT TESTED'

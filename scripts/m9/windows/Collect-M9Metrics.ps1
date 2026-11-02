@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][ValidateSet('Baseline', 'PostSoak', 'PostRecovery', 'Final')][string]$Phase,
     [ValidateRange(5, 300)][int]$DurationSeconds = 30,
     [ValidateRange(1, 30)][int]$SampleIntervalSeconds = 2,
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$OutputDirectory,
     [string]$VBoxManage = (Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe')
 )
@@ -16,13 +16,13 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $DataRoot = [IO.Path]::GetFullPath($DataRoot)
 $manifestPath = Join-Path $DataRoot 'installation.json'
-$cliPath = Join-Path $DataRoot 'bin\printbridgectl.exe'
+$cliPath = Join-Path $DataRoot 'bin\quirewirectl.exe'
 foreach ($required in @($manifestPath, $cliPath, $VBoxManage)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required metrics dependency is absent: $required" }
 }
 $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-if ($manifest.schema -ne 'printbridge.m8.installation.v1' -or $manifest.owner_sid -ne $ownerSid -or
+if ($manifest.schema -ne 'quirewire.m8.installation.v1' -or $manifest.owner_sid -ne $ownerSid -or
     [IO.Path]::GetFullPath($manifest.data_root) -ne $DataRoot -or -not $manifest.vm) {
     throw 'The M8 manifest does not authorize metrics for this user, data root, and VM.'
 }
@@ -52,7 +52,7 @@ function Get-DirectoryBytes([string]$Path) {
 
 function Get-Status {
     $output = @(& $cliPath status 2>&1 | ForEach-Object { $_.ToString() })
-    if ($LASTEXITCODE -ne 0) { throw 'The PrintBridge agent is unavailable during metrics collection.' }
+    if ($LASTEXITCODE -ne 0) { throw 'The QuireWire agent is unavailable during metrics collection.' }
     ($output -join "`n") | ConvertFrom-Json
 }
 
@@ -73,14 +73,14 @@ $vmBytesBefore = if ($vmDirectory) { Get-DirectoryBytes $vmDirectory } else { [u
 $samples = [Collections.Generic.List[object]]::new()
 $watch = [Diagnostics.Stopwatch]::StartNew()
 do {
-    $cim = @(Get-CimInstance Win32_Process -Filter "Name='printbridge-agent.exe' OR Name='VBoxHeadless.exe' OR Name='printbridge-desktop.exe'" -ErrorAction Stop)
+    $cim = @(Get-CimInstance Win32_Process -Filter "Name='quirewire-agent.exe' OR Name='VBoxHeadless.exe' OR Name='quirewire-desktop.exe'" -ErrorAction Stop)
     foreach ($process in $cim) {
         $kind = $null
-        if ($process.Name -eq 'printbridge-agent.exe' -and $process.ExecutablePath -and
+        if ($process.Name -eq 'quirewire-agent.exe' -and $process.ExecutablePath -and
             [IO.Path]::GetFullPath($process.ExecutablePath) -eq $agentPath) { $kind = 'agent' }
         elseif ($process.Name -eq 'VBoxHeadless.exe' -and $ownedVmPid -and
             $process.ProcessId -eq $ownedVmPid) { $kind = 'owned_vm' }
-        elseif ($process.Name -eq 'printbridge-desktop.exe' -and $process.ExecutablePath -and
+        elseif ($process.Name -eq 'quirewire-desktop.exe' -and $process.ExecutablePath -and
             [IO.Path]::GetFullPath($process.ExecutablePath).StartsWith($DataRoot, [StringComparison]::OrdinalIgnoreCase)) { $kind = 'desktop' }
         if (-not $kind) { continue }
         $live = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue
@@ -125,7 +125,7 @@ function Summarize([string]$Kind) {
 $agent = Summarize 'agent'
 $ownedVm = Summarize 'owned_vm'
 $desktop = Summarize 'desktop'
-if (-not $agent -or @($agent.pids).Count -ne 1) { throw 'Metrics require exactly one installed PrintBridge agent.' }
+if (-not $agent -or @($agent.pids).Count -ne 1) { throw 'Metrics require exactly one installed QuireWire agent.' }
 $targets = [ordered]@{
     agent_working_set_max_bytes = 50MB
     agent_average_cpu_max_percent_one_core = 1.0
@@ -143,7 +143,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory "$stamp-$($Phase.ToLowerInvariant()).json"
 [ordered]@{
-    schema = 'printbridge.m9.metrics.v1'
+    schema = 'quirewire.m9.metrics.v1'
     captured_utc = [DateTime]::UtcNow.ToString('o')
     phase = $Phase
     duration_seconds = [math]::Round($actualSeconds, 3)
@@ -165,4 +165,4 @@ $path = Join-Path $OutputDirectory "$stamp-$($Phase.ToLowerInvariant()).json"
     comparisons = $comparisons
     redaction = 'USB serial, process command lines, environment, window titles, and file contents are omitted.'
 } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m9.metrics-result.v1'; path = $path; phase = $Phase; comparisons = $comparisons } | ConvertTo-Json -Depth 5
+[pscustomobject]@{ schema = 'quirewire.m9.metrics-result.v1'; path = $path; phase = $Phase; comparisons = $comparisons } | ConvertTo-Json -Depth 5

@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, ComponentState, ComponentStatus, DependencyInfo, Hypervisor, OwnedVm,
     OwnershipMarker, UsbAccess, UsbDevice, UsbIdentity, VmId,
 };
@@ -26,21 +26,21 @@ use crate::parser::{
     parse_vm_usb_filters,
 };
 
-pub const OWNERSHIP_SCHEMA_KEY: &str = "PrintBridge/Schema";
-pub const OWNERSHIP_SCHEMA_VALUE: &str = "printbridge.m3.owned-vm.v1";
-pub const OWNERSHIP_MARKER_KEY: &str = "PrintBridge/Owner";
-pub const LAN_FORWARD_SCHEMA_KEY: &str = "PrintBridge/LanSchema";
-pub const LAN_FORWARD_SCHEMA_VALUE: &str = "printbridge.m10.lan-forward.v1";
-pub const LAN_FORWARD_RULE_KEY: &str = "PrintBridge/LanRule";
-pub const LAN_FORWARD_RULE_NAME: &str = "printbridge-m10-lan-ipp";
-pub const SCAN_LOOPBACK_SCHEMA_KEY: &str = "PrintBridge/ScanLoopbackSchema";
-pub const SCAN_LOOPBACK_RULE_KEY: &str = "PrintBridge/ScanLoopbackRule";
-pub const SCAN_LOOPBACK_SCHEMA_VALUE: &str = "printbridge.m11.scan-loopback.v1";
-pub const SCAN_LOOPBACK_RULE_NAME: &str = "printbridge-m11-escl";
-pub const SCAN_LAN_SCHEMA_KEY: &str = "PrintBridge/ScanLanSchema";
-pub const SCAN_LAN_RULE_KEY: &str = "PrintBridge/ScanLanRule";
-pub const SCAN_LAN_SCHEMA_VALUE: &str = "printbridge.m11.scan-lan.v1";
-pub const SCAN_LAN_RULE_NAME: &str = "printbridge-m11-lan-escl";
+pub const OWNERSHIP_SCHEMA_KEY: &str = "QuireWire/Schema";
+pub const OWNERSHIP_SCHEMA_VALUE: &str = "quirewire.m3.owned-vm.v1";
+pub const OWNERSHIP_MARKER_KEY: &str = "QuireWire/Owner";
+pub const LAN_FORWARD_SCHEMA_KEY: &str = "QuireWire/LanSchema";
+pub const LAN_FORWARD_SCHEMA_VALUE: &str = "quirewire.m10.lan-forward.v1";
+pub const LAN_FORWARD_RULE_KEY: &str = "QuireWire/LanRule";
+pub const LAN_FORWARD_RULE_NAME: &str = "quirewire-m10-lan-ipp";
+pub const SCAN_LOOPBACK_SCHEMA_KEY: &str = "QuireWire/ScanLoopbackSchema";
+pub const SCAN_LOOPBACK_RULE_KEY: &str = "QuireWire/ScanLoopbackRule";
+pub const SCAN_LOOPBACK_SCHEMA_VALUE: &str = "quirewire.m11.scan-loopback.v1";
+pub const SCAN_LOOPBACK_RULE_NAME: &str = "quirewire-m11-escl";
+pub const SCAN_LAN_SCHEMA_KEY: &str = "QuireWire/ScanLanSchema";
+pub const SCAN_LAN_RULE_KEY: &str = "QuireWire/ScanLanRule";
+pub const SCAN_LAN_SCHEMA_VALUE: &str = "quirewire.m11.scan-lan.v1";
+pub const SCAN_LAN_RULE_NAME: &str = "quirewire-m11-lan-escl";
 
 #[derive(Clone, Copy)]
 struct ForwardOwnership {
@@ -94,7 +94,7 @@ impl VirtualBoxProvider<ProcessRunner> {
     ) -> Result<Self, BridgeError> {
         let ownership_schema = ownership_schema.into();
         let mut candidates = Vec::new();
-        if let Some(configured) = env::var_os("PRINTBRIDGE_VBOXMANAGE") {
+        if let Some(configured) = env::var_os("QUIREWIRE_VBOXMANAGE") {
             candidates.push(PathBuf::from(configured));
         }
         if let Some(program_files) = env::var_os("ProgramFiles") {
@@ -1141,11 +1141,11 @@ fn filter_matches(filter: &VmUsbFilter, selected: &UsbIdentity) -> bool {
 }
 
 fn filter_name(marker: &str) -> String {
-    format!("PrintBridge M3 {:016x}", stable_hash(marker))
+    format!("QuireWire M3 {:016x}", stable_hash(marker))
 }
 
 fn owned_vm_name(marker: &str) -> String {
-    format!("PrintBridge-M3-{:016x}", stable_hash(marker))
+    format!("QuireWire-M3-{:016x}", stable_hash(marker))
 }
 
 fn stable_hash(value: &str) -> u64 {
@@ -1170,7 +1170,7 @@ fn validate_uuid(value: &str) -> Result<(), BridgeError> {
 fn ownership_error(detail: &str) -> BridgeError {
     BridgeError::PermissionDenied {
         operation: detail.into(),
-        action: "Refusing to manage a VM that is not proven PrintBridge-owned.".into(),
+        action: "Refusing to manage a VM that is not proven QuireWire-owned.".into(),
     }
 }
 
@@ -1269,9 +1269,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    use printbridge_domain::{
-        BridgeError, Hypervisor, OwnedVm, OwnershipMarker, UsbIdentity, VmId,
-    };
+    use quirewire_domain::{BridgeError, Hypervisor, OwnedVm, OwnershipMarker, UsbIdentity, VmId};
 
     use super::{
         CommandOutput, CommandRunner, HostUsbDevice, HostUsbState, VirtualBoxConfig,
@@ -1326,7 +1324,7 @@ mod tests {
     fn owned_vm() -> OwnedVm {
         OwnedVm {
             id: VmId::new("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-            marker: OwnershipMarker::new("printbridge.m3.test-owned-vm"),
+            marker: OwnershipMarker::new("quirewire.m3.test-owned-vm"),
         }
     }
 
@@ -1343,11 +1341,11 @@ mod tests {
     }
 
     fn schema() -> Result<CommandOutput, BridgeError> {
-        output("Value: printbridge.m3.owned-vm.v1\n")
+        output("Value: quirewire.m3.owned-vm.v1\n")
     }
 
     fn marker() -> Result<CommandOutput, BridgeError> {
-        output("Value: printbridge.m3.test-owned-vm\n")
+        output("Value: quirewire.m3.test-owned-vm\n")
     }
 
     fn failed(stderr: &str) -> Result<CommandOutput, BridgeError> {
@@ -1490,7 +1488,7 @@ mod tests {
     #[test]
     fn import_uses_generated_name_then_persists_live_ownership() {
         let appliance = std::env::temp_dir().join(format!(
-            "printbridge-m3-import-test-{}.ova",
+            "quirewire-m3-import-test-{}.ova",
             std::process::id()
         ));
         fs::write(&appliance, b"mock appliance").expect("temp appliance");
@@ -1511,7 +1509,7 @@ mod tests {
         let vm = provider
             .import(
                 &appliance,
-                OwnershipMarker::new("printbridge.m3.test-owned-vm"),
+                OwnershipMarker::new("quirewire.m3.test-owned-vm"),
             )
             .expect("mock import");
         fs::remove_file(&appliance).expect("remove temp appliance");
@@ -1535,7 +1533,7 @@ mod tests {
         assert!(
             import
                 .iter()
-                .any(|part| part.starts_with("--vmname=PrintBridge-M3-"))
+                .any(|part| part.starts_with("--vmname=QuireWire-M3-"))
         );
         assert_eq!(
             calls
@@ -1573,7 +1571,7 @@ mod tests {
             product_id: 0x0567,
             serial: Some("exact-sensitive-value".into()),
         };
-        let owned_name = super::filter_name("printbridge.m3.test-owned-vm");
+        let owned_name = super::filter_name("quirewire.m3.test-owned-vm");
         let before = "UUID=\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"\nVMState=\"running\"\nUSBFilterActive1=\"on\"\nUSBFilterName1=\"User filter\"\nUSBFilterVendorId1=\"1234\"\nUSBFilterProductId1=\"5678\"\nUSBFilterRemote1=\"no\"\n";
         let after = format!(
             "{before}USBFilterActive2=\"on\"\nUSBFilterName2=\"{owned_name}\"\nUSBFilterVendorId2=\"04f9\"\nUSBFilterProductId2=\"0567\"\nUSBFilterSerialNumber2=\"exact-sensitive-value\"\nUSBFilterRemote2=\"no\"\n"
@@ -1692,17 +1690,17 @@ mod tests {
         let mut machine = std::collections::BTreeMap::new();
         machine.insert(
             "Forwarding(0)".into(),
-            "printbridge-m4-ipp,tcp,127.0.0.1,8644,,631".into(),
+            "quirewire-m4-ipp,tcp,127.0.0.1,8644,,631".into(),
         );
         machine.insert(
             "Forwarding(1)".into(),
-            "printbridge-m10-lan-ipp,tcp,192.168.1.20,8644,,631".into(),
+            "quirewire-m10-lan-ipp,tcp,192.168.1.20,8644,,631".into(),
         );
         assert_eq!(
             super::nat_forward_rule(&machine, super::LAN_FORWARD_RULE_NAME)
                 .expect("one rule")
                 .as_deref(),
-            Some("printbridge-m10-lan-ipp,tcp,192.168.1.20,8644,,631")
+            Some("quirewire-m10-lan-ipp,tcp,192.168.1.20,8644,,631")
         );
         assert!(super::validate_lan_forward("192.168.1.20".parse().unwrap(), 8644, 631).is_ok());
         assert!(super::validate_lan_forward("127.0.0.1".parse().unwrap(), 8644, 631).is_err());
@@ -1710,7 +1708,7 @@ mod tests {
 
     #[test]
     fn scanner_loopback_forward_is_exactly_named_and_marker_owned() {
-        let desired = "printbridge-m11-escl,tcp,127.0.0.1,8645,,8090";
+        let desired = "quirewire-m11-escl,tcp,127.0.0.1,8645,,8090";
         let provider = VirtualBoxProvider::with_runner(
             VirtualBoxConfig::new("VBoxManage.exe"),
             ScriptedRunner::new(vec![
@@ -1753,10 +1751,10 @@ mod tests {
         }));
         assert!(calls.iter().any(|call| {
             call.get(2)
-                .is_some_and(|value| value == "PrintBridge/ScanLoopbackSchema")
+                .is_some_and(|value| value == "QuireWire/ScanLoopbackSchema")
                 && call
                     .get(3)
-                    .is_some_and(|value| value == "printbridge.m11.scan-loopback.v1")
+                    .is_some_and(|value| value == "quirewire.m11.scan-loopback.v1")
         }));
     }
 }

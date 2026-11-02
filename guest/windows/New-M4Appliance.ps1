@@ -108,15 +108,15 @@ function Get-VmProperty {
 
 function Set-BuildOwnership {
     param([string]$Vm, [string]$Marker)
-    Invoke-VBox -Arguments @('setextradata', $Vm, 'PrintBridge/Schema', 'printbridge.m4.build-vm.v1') | Out-Null
-    Invoke-VBox -Arguments @('setextradata', $Vm, 'PrintBridge/BuildMarker', $Marker) | Out-Null
+    Invoke-VBox -Arguments @('setextradata', $Vm, 'QuireWire/Schema', 'quirewire.m4.build-vm.v1') | Out-Null
+    Invoke-VBox -Arguments @('setextradata', $Vm, 'QuireWire/BuildMarker', $Marker) | Out-Null
 }
 
 function Assert-BuildOwnership {
     param([string]$Vm, [string]$Marker)
-    $schema = (Invoke-VBox -Arguments @('getextradata', $Vm, 'PrintBridge/Schema')).Output -join "`n"
-    $observed = (Invoke-VBox -Arguments @('getextradata', $Vm, 'PrintBridge/BuildMarker')).Output -join "`n"
-    if ($schema -notmatch 'Value: printbridge\.m4\.build-vm\.v1' -or $observed -notmatch "Value: $([regex]::Escape($Marker))") {
+    $schema = (Invoke-VBox -Arguments @('getextradata', $Vm, 'QuireWire/Schema')).Output -join "`n"
+    $observed = (Invoke-VBox -Arguments @('getextradata', $Vm, 'QuireWire/BuildMarker')).Output -join "`n"
+    if ($schema -notmatch 'Value: quirewire\.m4\.build-vm\.v1' -or $observed -notmatch "Value: $([regex]::Escape($Marker))") {
         throw 'Refusing to mutate a VM without the exact M4 build ownership marker.'
     }
 }
@@ -163,15 +163,15 @@ function New-BaseViso {
         '/isolinux/txt.cfg=:must-remove:',
         "/isolinux/txt.cfg=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\txt.cfg'))",
         "/preseed.cfg=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\preseed.cfg'))",
-        "/printbridge/base/provision-base.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\provision-base.sh'))",
-        "/printbridge/base/firstboot.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\firstboot.sh'))",
-        "/printbridge/base/apply-driver-media.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\apply-driver-media.sh'))",
-        "/printbridge/base/health.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\health.sh'))",
-        "/printbridge/base/configure-lan-cups.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\configure-lan-cups.sh'))",
-        "/printbridge/base/authorized_keys=$(Quote-VisoPath $PublicKeyPath)",
-        "/printbridge/manifests/debian-13.7-amd64.env=$(Quote-VisoPath $debianManifestPath)",
-        "/printbridge/config/90-printbridge-sshd.conf=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\90-printbridge-sshd.conf'))",
-        "/printbridge/config/printbridge-logrotate=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\printbridge-logrotate'))"
+        "/quirewire/base/provision-base.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\provision-base.sh'))",
+        "/quirewire/base/firstboot.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\firstboot.sh'))",
+        "/quirewire/base/apply-driver-media.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\apply-driver-media.sh'))",
+        "/quirewire/base/health.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\health.sh'))",
+        "/quirewire/base/configure-lan-cups.sh=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\linux\configure-lan-cups.sh'))",
+        "/quirewire/base/authorized_keys=$(Quote-VisoPath $PublicKeyPath)",
+        "/quirewire/manifests/debian-13.7-amd64.env=$(Quote-VisoPath $debianManifestPath)",
+        "/quirewire/config/90-quirewire-sshd.conf=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\90-quirewire-sshd.conf'))",
+        "/quirewire/config/quirewire-logrotate=$(Quote-VisoPath (Join-Path $repositoryRoot 'guest\config\quirewire-logrotate'))"
     )
     [IO.File]::WriteAllText($Destination, ($entries -join ' '), [Text.UTF8Encoding]::new($false))
 }
@@ -181,9 +181,9 @@ function New-DriverViso {
     $entries = @(
         '--iprt-iso-maker-file-marker-bourne-sh', [guid]::NewGuid().ToString(),
         '--file-mode=0444', '--dir-mode=0555', '--no-file-mode', '--no-dir-mode',
-        "/printbridge-driver/manifest.env=$(Quote-VisoPath $driverManifestPath)",
-        "/printbridge-driver/$($driverManifest.PATCH_FILENAME)=$(Quote-VisoPath $PatchPath)",
-        "/printbridge-driver/$($driverManifest.DRIVER_FILENAME)=$(Quote-VisoPath $DriverPath)"
+        "/quirewire-driver/manifest.env=$(Quote-VisoPath $driverManifestPath)",
+        "/quirewire-driver/$($driverManifest.PATCH_FILENAME)=$(Quote-VisoPath $PatchPath)",
+        "/quirewire-driver/$($driverManifest.DRIVER_FILENAME)=$(Quote-VisoPath $DriverPath)"
     )
     [IO.File]::WriteAllText($Destination, ($entries -join ' '), [Text.UTF8Encoding]::new($false))
 }
@@ -221,7 +221,7 @@ function Get-ExactBrotherUsb {
 
 function Add-ExactUsbFilter {
     param([string]$Vm, [pscustomobject]$Usb)
-    $arguments = @('usbfilter', 'add', '0', '--target', $Vm, '--name', 'PrintBridge M4 exact Brother', '--active', 'yes', '--vendorid', '04f9', '--productid', '0567', '--remote', 'no')
+    $arguments = @('usbfilter', 'add', '0', '--target', $Vm, '--name', 'QuireWire M4 exact Brother', '--active', 'yes', '--vendorid', '04f9', '--productid', '0567', '--remote', 'no')
     if ($Usb.Serial) { $arguments += @('--serialnumber', $Usb.Serial) }
     Invoke-VBox -Arguments $arguments -SensitiveOutput | Out-Null
 }
@@ -244,17 +244,17 @@ if ((Get-Content -Raw -LiteralPath $SshPublicKeyPath) -notmatch '^ssh-(ed25519|r
     throw 'SSH public key is not in an accepted OpenSSH public-key format.'
 }
 
-$baseOva = if ($BaseOvaPath) { [IO.Path]::GetFullPath($BaseOvaPath) } else { Join-Path $OutputDirectory 'printbridge-m4-base.ova' }
-$driverViso = Join-Path $OutputDirectory 'printbridge-m4-owner-driver.viso'
-$configuredOva = Join-Path $OutputDirectory 'printbridge-m4-dcpl2600d.owner-local.ova'
+$baseOva = if ($BaseOvaPath) { [IO.Path]::GetFullPath($BaseOvaPath) } else { Join-Path $OutputDirectory 'quirewire-m4-base.ova' }
+$driverViso = Join-Path $OutputDirectory 'quirewire-m4-owner-driver.viso'
+$configuredOva = Join-Path $OutputDirectory 'quirewire-m4-dcpl2600d.owner-local.ova'
 $builtBaseHere = $false
 
 if ($Stage -in @('All', 'Base')) {
-    $baseMarker = "printbridge.m4.base.$([guid]::NewGuid())"
-    $baseName = "PrintBridge-M4-Base-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+    $baseMarker = "quirewire.m4.base.$([guid]::NewGuid())"
+    $baseName = "QuireWire-M4-Base-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
     $baseFolder = Join-Path $OutputDirectory 'base-vm'
-    $baseViso = Join-Path $OutputDirectory 'printbridge-m4-base-installer.viso'
-    $disk = Join-Path $baseFolder 'printbridge-m4-base.vdi'
+    $baseViso = Join-Path $OutputDirectory 'quirewire-m4-base-installer.viso'
+    $disk = Join-Path $baseFolder 'quirewire-m4-base.vdi'
     [IO.Directory]::CreateDirectory($baseFolder) | Out-Null
     New-BaseViso -IsoPath $DebianIsoPath -PublicKeyPath $SshPublicKeyPath -Destination $baseViso
     $baseVm = New-MinimalVm -Name $baseName -Marker $baseMarker -MachineFolder $baseFolder -DiskPath $disk -InstallViso $baseViso
@@ -264,7 +264,7 @@ if ($Stage -in @('All', 'Base')) {
         Assert-BuildOwnership -Vm $baseVm -Marker $baseMarker
         Invoke-VBox -Arguments @('storageattach', $baseVm, '--storagectl', 'SATA Controller', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none') | Out-Null
         Invoke-VBox -Arguments @('modifyvm', $baseVm, '--memory', "$RuntimeMemoryMiB", '--boot1', 'disk', '--boot2', 'none', '--boot3', 'none', '--boot4', 'none') | Out-Null
-        Invoke-VBox -Arguments @('export', $baseVm, "--output=$baseOva", '--ovf20', '--manifest', '--options=nomacs', '--vsys=0', '--product=PrintBridge Base Appliance', '--vendor=PrintBridge', '--version=m4') | Out-Null
+        Invoke-VBox -Arguments @('export', $baseVm, "--output=$baseOva", '--ovf20', '--manifest', '--options=nomacs', '--vsys=0', '--product=QuireWire Base Appliance', '--vendor=QuireWire', '--version=m4') | Out-Null
         $builtBaseHere = $true
     }
     finally {
@@ -285,8 +285,8 @@ if ($Stage -in @('All', 'Configured')) {
     Assert-FileHash -Path $BrotherDriverPath -Expected $driverManifest.DRIVER_SHA256 -Label 'Brother DCP-L2600D driver'
     New-DriverViso -PatchPath $BrotherPatchPath -DriverPath $BrotherDriverPath -Destination $driverViso
 
-    $configuredMarker = "printbridge.m4.configured.$([guid]::NewGuid())"
-    $configuredName = "PrintBridge-M4-Configured-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+    $configuredMarker = "quirewire.m4.configured.$([guid]::NewGuid())"
+    $configuredName = "QuireWire-M4-Configured-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
     $configuredFolder = Join-Path $OutputDirectory 'configured-vm'
     [IO.Directory]::CreateDirectory($configuredFolder) | Out-Null
     Invoke-VBox -Arguments @('import', $baseOva, '--options=importtovdi', '--vsys=0', "--vmname=$configuredName", "--basefolder=$configuredFolder", "--memory=$RuntimeMemoryMiB", '--cpus=1') | Out-Null
@@ -301,7 +301,7 @@ if ($Stage -in @('All', 'Configured')) {
         Wait-VmPowerOff -Vm $configuredVm -TimeoutMinutes 15
         Assert-BuildOwnership -Vm $configuredVm -Marker $configuredMarker
         Invoke-VBox -Arguments @('storageattach', $configuredVm, '--storagectl', 'SATA Controller', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none') | Out-Null
-        Invoke-VBox -Arguments @('export', $configuredVm, "--output=$configuredOva", '--ovf20', '--manifest', '--options=nomacs', '--vsys=0', '--product=PrintBridge DCP-L2600D Appliance (owner-local)', '--vendor=PrintBridge', '--version=m4') | Out-Null
+        Invoke-VBox -Arguments @('export', $configuredVm, "--output=$configuredOva", '--ovf20', '--manifest', '--options=nomacs', '--vsys=0', '--product=QuireWire DCP-L2600D Appliance (owner-local)', '--vendor=QuireWire', '--version=m4') | Out-Null
     }
     finally {
         if (-not $KeepBuildVms -and $configuredVm) {
@@ -311,7 +311,7 @@ if ($Stage -in @('All', 'Configured')) {
 }
 
 $result = [ordered]@{
-    schema = 'printbridge.m4.build-result.v1'
+    schema = 'quirewire.m4.build-result.v1'
     virtualbox_version = $version
     build_memory_mib = $BuildMemoryMiB
     runtime_memory_mib = $RuntimeMemoryMiB

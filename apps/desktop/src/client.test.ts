@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TauriPrintBridgeClient } from "./client";
+import { TauriQuireWireClient } from "./client";
 import type { Invoke } from "./client";
 import type { AgentStatus } from "./types";
 
@@ -23,14 +23,14 @@ const status: AgentStatus = {
     interface_alias: "Ethernet",
     network_category: "private",
     address: "192.168.1.20",
-    endpoint: "ipp://192.168.1.20:8644/printers/PrintBridge_DCP_L2600D",
-    service_instance: "Brother via PrintBridge",
+    endpoint: "ipp://192.168.1.20:8644/printers/QuireWire_DCP_L2600D",
+    service_instance: "Brother via QuireWire",
   },
   scanner: {
     available: true,
     loopback_url: "http://127.0.0.1:8645/",
     lan_url: "http://192.168.1.20:8645/",
-    service_instance: "Brother via PrintBridge Scanner",
+    service_instance: "Brother via QuireWire Scanner",
     make_model: "Brother DCP-L2600D",
     sources: ["platen"],
     color_modes: ["Grayscale8"],
@@ -39,7 +39,7 @@ const status: AgentStatus = {
   },
 };
 
-describe("TauriPrintBridgeClient", () => {
+describe("TauriQuireWireClient", () => {
   it("maps the typed frontend contract to fixed Tauri commands", async () => {
     const calls: [string, Record<string, unknown> | undefined][] = [];
     const invoke: Invoke = async <T>(command: string, args?: Record<string, unknown>): Promise<T> => {
@@ -47,7 +47,7 @@ describe("TauriPrintBridgeClient", () => {
       if (command === "agent_get_status") return status as T;
       return { operation: command, accepted: true, detail: JSON.stringify(args ?? {}) } as T;
     };
-    const client = new TauriPrintBridgeClient(invoke);
+    const client = new TauriQuireWireClient(invoke);
 
     expect((await client.getStatus()).overall).toBe("ready");
     await client.beginSetup(7);
@@ -66,7 +66,7 @@ describe("TauriPrintBridgeClient", () => {
     const invoke: Invoke = async <T>(): Promise<T> => {
       throw { code: "usb_busy", message: "Printer is busy", action: "Close the other app.", retryable: true };
     };
-    const client = new TauriPrintBridgeClient(invoke);
+    const client = new TauriQuireWireClient(invoke);
 
     await expect(client.getStatus()).rejects.toMatchObject({
       code: "usb_busy",

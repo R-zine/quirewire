@@ -5,7 +5,7 @@ param(
     [string]$Action,
 
     [string]$IppUrl,
-    [ValidateNotNullOrEmpty()][string]$PrinterName = 'Brother via PrintBridge M1',
+    [ValidateNotNullOrEmpty()][string]$PrinterName = 'Brother via QuireWire M1',
     [string]$EvidenceDirectory,
     [switch]$Apply,
     [switch]$SkipNetworkProbe
@@ -14,9 +14,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$OwnedComment = 'PrintBridge M1 manual spike - owned by Manage-M1IppPrinter.ps1'
+$OwnedComment = 'QuireWire M1 manual spike - owned by Manage-M1IppPrinter.ps1'
 $ExpectedDriver = 'Microsoft IPP Class Driver'
-$OwnedSchema = 'printbridge.m1.owned-printer.v1'
+$OwnedSchema = 'quirewire.m1.owned-printer.v1'
 
 if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
     $EvidenceDirectory = Join-Path $PSScriptRoot '..\..\..\artifacts\m1\windows-printer'
@@ -75,7 +75,7 @@ function Write-ActionRecord {
         [Parameter(Mandatory = $true)]$Payload
     )
     $record = [ordered]@{
-        schema = 'printbridge.m1.windows-printer-action.v1'
+        schema = 'quirewire.m1.windows-printer-action.v1'
         recordedUtc = [DateTime]::UtcNow.ToString('o')
         action = $Operation
         data = $Payload

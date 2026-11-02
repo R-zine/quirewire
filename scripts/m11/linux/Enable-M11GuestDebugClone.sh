@@ -11,7 +11,7 @@ raw_clone=$(readlink -f "$1")
   exit 1
 }
 
-temporary=$(mktemp -d /var/tmp/printbridge-m11-debug-clone.XXXXXX)
+temporary=$(mktemp -d /var/tmp/quirewire-m11-debug-clone.XXXXXX)
 mountpoint="$temporary/root"
 mkdir "$mountpoint"
 loop=
@@ -41,7 +41,7 @@ root_partition=
 for partition in "${loop}"p*; do
   [[ -b "$partition" ]] || continue
   if mount "$partition" "$mountpoint" 2>/dev/null; then
-    if [[ -f "$mountpoint/etc/printbridge/guest.env" ]]; then
+    if [[ -f "$mountpoint/etc/quirewire/guest.env" ]]; then
       root_partition=$partition
       break
     fi
@@ -49,14 +49,14 @@ for partition in "${loop}"p*; do
   fi
 done
 [[ -n "$root_partition" ]] || {
-  echo 'ERROR: the clone has no exact PrintBridge guest root partition' >&2
+  echo 'ERROR: the clone has no exact QuireWire guest root partition' >&2
   exit 1
 }
-grep -Fxq 'PRINTBRIDGE_GUEST_SCHEMA=printbridge.m4.guest.v1' \
-  "$mountpoint/etc/printbridge/guest.env"
-grep -Fxq 'QUEUE_NAME=PrintBridge_DCP_L2600D' \
-  "$mountpoint/etc/printbridge/guest.env"
-[[ ! -e "$mountpoint/var/lib/printbridge/m11-debug-clone" ]]
+grep -Fxq 'QUIREWIRE_GUEST_SCHEMA=quirewire.m4.guest.v1' \
+  "$mountpoint/etc/quirewire/guest.env"
+grep -Fxq 'QUEUE_NAME=QuireWire_DCP_L2600D' \
+  "$mountpoint/etc/quirewire/guest.env"
+[[ ! -e "$mountpoint/var/lib/quirewire/m11-debug-clone" ]]
 
 unit="$mountpoint/usr/lib/systemd/system/airsaned.service"
 [[ $(grep -Fc 'ExecStart=/usr/local/bin/airsaned ' "$unit") -eq 1 ]]
@@ -66,16 +66,16 @@ sed -i 's#^ExecStart=/usr/local/bin/airsaned #ExecStart=/usr/local/bin/airsaned 
 saned_uid=$(chroot "$mountpoint" id -u saned)
 saned_gid=$(chroot "$mountpoint" id -g saned)
 install -o "$saned_uid" -g "$saned_gid" -m 0644 /dev/null \
-  "$mountpoint/var/log/printbridge/airsaned-debug.log"
+  "$mountpoint/var/log/quirewire/airsaned-debug.log"
 install -d -m 0755 "$mountpoint/etc/systemd/system/airsaned.service.d"
-cat > "$mountpoint/etc/systemd/system/airsaned.service.d/printbridge-diagnostic.conf" <<'EOF'
+cat > "$mountpoint/etc/systemd/system/airsaned.service.d/quirewire-diagnostic.conf" <<'EOF'
 [Service]
-StandardOutput=append:/var/log/printbridge/airsaned-debug.log
-StandardError=append:/var/log/printbridge/airsaned-debug.log
+StandardOutput=append:/var/log/quirewire/airsaned-debug.log
+StandardError=append:/var/log/quirewire/airsaned-debug.log
 EOF
-chmod 0644 "$mountpoint/etc/systemd/system/airsaned.service.d/printbridge-diagnostic.conf"
-printf '%s\n' 'schema=printbridge.m11.debug-clone.v1' \
-  > "$mountpoint/var/lib/printbridge/m11-debug-clone"
-chmod 0644 "$mountpoint/var/lib/printbridge/m11-debug-clone"
+chmod 0644 "$mountpoint/etc/systemd/system/airsaned.service.d/quirewire-diagnostic.conf"
+printf '%s\n' 'schema=quirewire.m11.debug-clone.v1' \
+  > "$mountpoint/var/lib/quirewire/m11-debug-clone"
+chmod 0644 "$mountpoint/var/lib/quirewire/m11-debug-clone"
 sync
 echo 'AirSane debug logging enabled only in the exact disposable raw clone.'

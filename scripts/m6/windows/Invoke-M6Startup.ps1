@@ -7,17 +7,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$taskPath = '\PrintBridge\'
+$taskPath = '\QuireWire\'
 $taskName = 'Agent'
-$schema = 'printbridge.m6.startup-task.v1'
-$description = "PrintBridge owned task; schema=$schema; owner_sid=$OwnerSid"
+$schema = 'quirewire.m6.startup-task.v1'
+$description = "QuireWire owned task; schema=$schema; owner_sid=$OwnerSid"
 
 function Encode-Text([string]$Value) {
     [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value))
 }
 
 function Write-Record([bool]$Ok, [bool]$Enabled, [string]$Message = '') {
-    'PRINTBRIDGE_WINDOWS_V1'
+    'QUIREWIRE_WINDOWS_V1'
     "ok=$($Ok.ToString().ToLowerInvariant())"
     "enabled=$($Enabled.ToString().ToLowerInvariant())"
     "owner_sid=$(Encode-Text $OwnerSid)"
@@ -45,7 +45,7 @@ function Get-OwnedTask {
     if ($task.Description -ne $description -or $principalSid -ne $OwnerSid -or
         $actionRecord.Count -ne 1 -or $actionRecord[0].Execute -ne $AgentExecutable -or
         $actionRecord[0].Arguments -ne $expectedArguments) {
-        throw 'A colliding Task Scheduler entry is not exactly owned by this PrintBridge installation.'
+        throw 'A colliding Task Scheduler entry is not exactly owned by this QuireWire installation.'
     }
     $task
 }

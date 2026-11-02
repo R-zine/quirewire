@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-queue=PrintBridge_DCP_L2600D
+queue=QuireWire_DCP_L2600D
 mode=${1:---health}
 case "$mode" in
   --health|--diagnostics) ;;
@@ -23,11 +23,11 @@ if [[ "$state" != not-configured ]] && ipptool -tv "ipp://localhost/printers/$qu
   ipp=pass
 fi
 driver_mode=none
-if [[ -r /var/lib/printbridge/driver-selection.env ]]; then
-  driver_mode=$(sed -n 's/^driver_mode=//p' /var/lib/printbridge/driver-selection.env)
+if [[ -r /var/lib/quirewire/driver-selection.env ]]; then
+  driver_mode=$(sed -n 's/^driver_mode=//p' /var/lib/quirewire/driver-selection.env)
 fi
 
-printf 'schema=printbridge.m4.health.v1\n'
+printf 'schema=quirewire.m4.health.v1\n'
 printf 'cups=%s\n' "$cups_state"
 printf 'queue=%s\n' "$state"
 printf 'accepting=%s\n' "$accepting"

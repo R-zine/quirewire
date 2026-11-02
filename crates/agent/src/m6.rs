@@ -6,32 +6,32 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, ComponentState, ComponentStatus, GuestPrinting, GuestScanning, Hypervisor,
     JobState, OwnedVm, OwnershipMarker, PrinterEndpoint, ScannerCapabilities, ScannerEndpoint,
     Startup, UsbAccess, UsbDevice, UsbIdentity, VmId, WindowsPrinting,
 };
-use printbridge_ipc::{
+use quirewire_ipc::{
     AgentComponents, AgentEvent, AgentStatus, Command, DeviceSummary, Diagnostics, ErrorPayload,
     LanStatus as WireLanStatus, OperationResult, PROTOCOL_VERSION, Payload, RequestEnvelope,
     ResponseEnvelope, ScannerStatus, StartupStatus, TestPrintResult, WireComponent,
     WireComponentState, WireError, read_request, write_response,
 };
-use printbridge_provider_cups::CupsIppProvider;
-use printbridge_provider_lan::{LanAdvertisement, LanAdvertiser, ScanAdvertisement};
-use printbridge_provider_scan::EsclProvider;
-use printbridge_provider_virtualbox::VirtualBoxProvider;
-use printbridge_provider_windows::{
+use quirewire_provider_cups::CupsIppProvider;
+use quirewire_provider_lan::{LanAdvertisement, LanAdvertiser, ScanAdvertisement};
+use quirewire_provider_scan::EsclProvider;
+use quirewire_provider_virtualbox::VirtualBoxProvider;
+use quirewire_provider_windows::{
     WindowsLanProvider, WindowsPrintProvider, WindowsStartupProvider,
 };
 use serde::{Deserialize, Serialize};
 use tokio::io::BufReader;
 use tokio::sync::Notify;
 
-pub const M6_CONFIG_SCHEMA: &str = "printbridge.m6.config.v1";
-const STATE_SCHEMA: &str = "printbridge.m6.state.v1";
-const VM_SCHEMA: &str = "printbridge.m4.acceptance-vm.v1";
-const TASK_NAME: &str = r"\PrintBridge\Agent";
+pub const M6_CONFIG_SCHEMA: &str = "quirewire.m6.config.v1";
+const STATE_SCHEMA: &str = "quirewire.m6.state.v1";
+const VM_SCHEMA: &str = "quirewire.m4.acceptance-vm.v1";
+const TASK_NAME: &str = r"\QuireWire\Agent";
 const TICK_INTERVAL: Duration = Duration::from_secs(1);
 const HEALTHY_INTERVAL: Duration = Duration::from_secs(10);
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
@@ -131,9 +131,9 @@ impl M6Config {
             .filter(|value| !value.is_empty())
             .cloned();
         let printer_name = required(&values, "printer_name")?;
-        if printer_name != "Brother via PrintBridge" {
+        if printer_name != "Brother via QuireWire" {
             return Err(config_error(
-                "M6 manages only the accepted queue name 'Brother via PrintBridge'",
+                "M6 manages only the accepted queue name 'Brother via QuireWire'",
             ));
         }
         let port = required(&values, "endpoint_port")?
@@ -478,7 +478,7 @@ impl RealBackend {
         StartupStatus {
             registered: self.startup_registered.unwrap_or(false),
             task_name: TASK_NAME.into(),
-            logoff_behavior: "On-demand mode: opening PrintBridge starts sharing; Exit stops the VM and agent. The login task must remain absent."
+            logoff_behavior: "On-demand mode: opening QuireWire starts sharing; Exit stops the VM and agent. The login task must remain absent."
                 .into(),
         }
     }
@@ -566,7 +566,7 @@ impl RealBackend {
         };
         let advertisement = LanAdvertisement {
             instance_name: config.printer_name.clone(),
-            hostname: "printbridge-m4.local.".into(),
+            hostname: "quirewire-m4.local.".into(),
             address,
             port: config.endpoint.port(),
             queue: config.endpoint.queue().into(),
@@ -580,7 +580,7 @@ impl RealBackend {
         let scanner_advertisement = config.approved_scan_port.and_then(|port| {
             scanner_capabilities.map(|capabilities| ScanAdvertisement {
                 instance_name: format!("{} Scanner", config.printer_name),
-                hostname: "printbridge-m4.local.".into(),
+                hostname: "quirewire-m4.local.".into(),
                 address,
                 port,
                 make_model: capabilities.make_model.clone(),
@@ -785,7 +785,7 @@ impl RealBackend {
                 error("Windows queue exists but ownership could not be verified")
             }
             Ok(status) if status.is_default => {
-                degraded("Owned queue is unexpectedly the default; PrintBridge will not change it")
+                degraded("Owned queue is unexpectedly the default; QuireWire will not change it")
             }
             Ok(_) => match self.windows.verify_driver(&config.printer_name) {
                 Ok(()) => ready("Owned queue uses Microsoft IPP Class Driver"),
@@ -1125,7 +1125,7 @@ impl<B: ReconcileBackend> Supervisor<B> {
                 "Spooler acceptance and CUPS completion do not prove physical paper output.".into(),
                 "Scan documents and image bytes never pass through agent IPC, logs, or diagnostics."
                     .into(),
-                "PrintBridge is on-demand: explicit Exit or a lost desktop heartbeat stops LAN sharing and the owned VM."
+                "QuireWire is on-demand: explicit Exit or a lost desktop heartbeat stops LAN sharing and the owned VM."
                     .into(),
             ],
         }
@@ -1173,19 +1173,19 @@ pub async fn run_agent(
     on_demand: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let config = M6Config::load(&config_path)?;
-    let current_sid = printbridge_ipc::windows_pipe::current_user_sid()?;
+    let current_sid = quirewire_ipc::windows_pipe::current_user_sid()?;
     if current_sid != config.owner_sid {
         return Err(format!(
             "configured owner SID does not match the current interactive user ({current_sid})"
         )
         .into());
     }
-    let factory = printbridge_ipc::windows_pipe::SecurePipeFactory::new(&config.owner_sid)?;
+    let factory = quirewire_ipc::windows_pipe::SecurePipeFactory::new(&config.owner_sid)?;
     let mut server = factory.create_first().map_err(|error| {
         if error.raw_os_error() == Some(5) || error.raw_os_error() == Some(231) {
             io::Error::new(
                 io::ErrorKind::AlreadyExists,
-                "another PrintBridge agent already owns the per-user pipe",
+                "another QuireWire agent already owns the per-user pipe",
             )
         } else {
             error
@@ -1240,7 +1240,7 @@ pub async fn run_agent(
                 Ok(true) => connection_shutdown.notify_one(),
                 Ok(false) => {}
                 Err(error) => {
-                    eprintln!("printbridge-agent IPC: {error}");
+                    eprintln!("quirewire-agent IPC: {error}");
                 }
             }
         });
@@ -1486,7 +1486,7 @@ fn port_available(port: u16) -> Result<(), BridgeError> {
         .map(drop)
         .map_err(|_| BridgeError::PortConflict {
             port,
-            action: "Stop the conflicting loopback listener or repair PrintBridge with a newly validated stable port."
+            action: "Stop the conflicting loopback listener or repair QuireWire with a newly validated stable port."
                 .into(),
         })
 }
@@ -1588,7 +1588,7 @@ fn config_error(detail: impl Into<String>) -> BridgeError {
 fn state_io_error(error: io::Error) -> BridgeError {
     BridgeError::PermissionDenied {
         operation: "persisting owner-protected M6 state".into(),
-        action: format!("Verify the PrintBridge data directory ACL and free space ({error})."),
+        action: format!("Verify the QuireWire data directory ACL and free space ({error})."),
     }
 }
 
@@ -1598,21 +1598,21 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
-    use printbridge_ipc::CommandResult;
+    use quirewire_ipc::CommandResult;
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-    const CONFIG: &str = "schema=printbridge.m6.config.v1\n\
+    const CONFIG: &str = "schema=quirewire.m6.config.v1\n\
 owner_sid=S-1-5-21-111-222-333-1001\n\
 vm_uuid=00000000-0000-0000-0000-000000000004\n\
 vm_marker=accepted-m4-owner\n\
-vm_schema=printbridge.m4.acceptance-vm.v1\n\
+vm_schema=quirewire.m4.acceptance-vm.v1\n\
 usb_vendor_id=04f9\n\
 usb_product_id=0567\n\
 usb_serial=secret-never-render\n\
-printer_name=Brother via PrintBridge\n\
+printer_name=Brother via QuireWire\n\
 endpoint_port=8644\n\
-guest_queue=PrintBridge_DCP_L2600D\n";
+guest_queue=QuireWire_DCP_L2600D\n";
 
     #[derive(Clone)]
     struct FakeBackend {
@@ -1692,7 +1692,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
 
     fn temporary_directory() -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "printbridge-m6-test-{}-{}",
+            "quirewire-m6-test-{}-{}",
             std::process::id(),
             TEST_COUNTER.fetch_add(1, Ordering::Relaxed)
         ));

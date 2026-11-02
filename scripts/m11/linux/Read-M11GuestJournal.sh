@@ -12,7 +12,7 @@ unit=$2
   exit 1
 }
 
-temporary=$(mktemp -d /var/tmp/printbridge-m11-journal.XXXXXX)
+temporary=$(mktemp -d /var/tmp/quirewire-m11-journal.XXXXXX)
 mountpoint="$temporary/root"
 mkdir "$mountpoint"
 loop=
@@ -42,7 +42,7 @@ root_partition=
 for partition in "${loop}"p*; do
   [[ -b "$partition" ]] || continue
   if mount -o ro "$partition" "$mountpoint" 2>/dev/null; then
-    if [[ -f "$mountpoint/etc/printbridge/guest.env" ]]; then
+    if [[ -f "$mountpoint/etc/quirewire/guest.env" ]]; then
       root_partition=$partition
       break
     fi
@@ -50,13 +50,13 @@ for partition in "${loop}"p*; do
   fi
 done
 [[ -n "$root_partition" ]] || {
-  echo 'ERROR: the disk has no exact PrintBridge guest root partition' >&2
+  echo 'ERROR: the disk has no exact QuireWire guest root partition' >&2
   exit 1
 }
-grep -Fxq 'PRINTBRIDGE_GUEST_SCHEMA=printbridge.m4.guest.v1' \
-  "$mountpoint/etc/printbridge/guest.env"
-grep -Fxq 'QUEUE_NAME=PrintBridge_DCP_L2600D' \
-  "$mountpoint/etc/printbridge/guest.env"
+grep -Fxq 'QUIREWIRE_GUEST_SCHEMA=quirewire.m4.guest.v1' \
+  "$mountpoint/etc/quirewire/guest.env"
+grep -Fxq 'QUEUE_NAME=QuireWire_DCP_L2600D' \
+  "$mountpoint/etc/quirewire/guest.env"
 [[ -d "$mountpoint/var/log/journal" ]]
 
 chroot "$mountpoint" /usr/bin/journalctl \

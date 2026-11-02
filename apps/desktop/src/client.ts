@@ -9,7 +9,7 @@ import type {
 } from "./types";
 import { ClientError } from "./types";
 
-export interface PrintBridgeClient {
+export interface QuireWireClient {
   getStatus(): Promise<AgentStatus>;
   discoverDevices(): Promise<DeviceSummary[]>;
   beginSetup(deviceIndex: number): Promise<OperationResult>;
@@ -21,7 +21,7 @@ export interface PrintBridgeClient {
   repair(): Promise<OperationResult>;
   exportDiagnostics(): Promise<string>;
   openScanner(): Promise<void>;
-  exitPrintBridge(): Promise<void>;
+  exitQuireWire(): Promise<void>;
 }
 
 export type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
@@ -42,12 +42,12 @@ function normalizeError(error: unknown): ClientError {
   return new ClientError({
     code: "desktop_ipc_failed",
     message: error instanceof Error ? error.message : String(error),
-    action: "Check that the PrintBridge agent is running, then try again.",
+    action: "Check that the QuireWire agent is running, then try again.",
     retryable: true,
   });
 }
 
-export class TauriPrintBridgeClient implements PrintBridgeClient {
+export class TauriQuireWireClient implements QuireWireClient {
   constructor(private readonly invoke: Invoke = tauriInvoke) {}
 
   private async call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
@@ -71,5 +71,5 @@ export class TauriPrintBridgeClient implements PrintBridgeClient {
   repair() { return this.call<OperationResult>("agent_repair"); }
   exportDiagnostics() { return this.call<string>("export_diagnostics"); }
   openScanner() { return this.call<void>("open_scanner"); }
-  exitPrintBridge() { return this.call<void>("exit_printbridge"); }
+  exitQuireWire() { return this.call<void>("exit_quirewire"); }
 }

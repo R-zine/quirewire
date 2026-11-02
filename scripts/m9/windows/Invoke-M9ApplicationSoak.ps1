@@ -5,8 +5,8 @@ param(
     [string]$SinglePath,
     [string]$PdfToolPath,
     [string]$SshPrivateKeyPath,
-    [ValidatePattern('^Brother via PrintBridge$')][string]$PrinterName = 'Brother via PrintBridge',
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [ValidatePattern('^Brother via QuireWire$')][string]$PrinterName = 'Brother via QuireWire',
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$OutputDirectory,
     [ValidateRange(10, 900)][int]$WaitForCupsSeconds = 300,
     [ValidateRange(0, 5000)][int]$BetweenJobsMilliseconds = 500,
@@ -36,28 +36,28 @@ $SshPrivateKeyPath = [IO.Path]::GetFullPath($SshPrivateKeyPath)
 $manifestPath = Join-Path $DocumentDirectory 'manifest.json'
 $installationPath = Join-Path $DataRoot 'installation.json'
 $statePath = Join-Path $DataRoot 'm5-windows-printer.json'
-$cliPath = Join-Path $DataRoot 'bin\printbridgectl.exe'
+$cliPath = Join-Path $DataRoot 'bin\quirewirectl.exe'
 foreach ($required in @($manifestPath, $installationPath, $statePath, $cliPath, $PdfToolPath, $SshPrivateKeyPath)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required M9 input is absent: $required" }
 }
 $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $installation = Get-Content -Raw -LiteralPath $installationPath | ConvertFrom-Json
-if ($installation.schema -ne 'printbridge.m8.installation.v1' -or $installation.owner_sid -ne $ownerSid -or
+if ($installation.schema -ne 'quirewire.m8.installation.v1' -or $installation.owner_sid -ne $ownerSid -or
     [IO.Path]::GetFullPath($installation.data_root) -ne [IO.Path]::GetFullPath($DataRoot) -or
     $installation.queue.name -ne $PrinterName) {
     throw 'The M8 installation manifest does not authorize this exact user, data root, and queue.'
 }
 $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
 $queue = Get-Printer -Name $PrinterName -Full -ErrorAction Stop
-if ($state.schema -ne 'printbridge.m5.owned-printer.v1' -or $state.printerName -ne $PrinterName -or
+if ($state.schema -ne 'quirewire.m5.owned-printer.v1' -or $state.printerName -ne $PrinterName -or
     $state.driverName -ne 'Microsoft IPP Class Driver' -or $queue.DriverName -ne $state.driverName -or
     $queue.PortName -ne $state.portName -or $queue.Comment -ne $state.ownedComment) {
-    throw 'The live Windows queue does not exactly match its PrintBridge ownership record.'
+    throw 'The live Windows queue does not exactly match its QuireWire ownership record.'
 }
 $pdfSignature = Get-AuthenticodeSignature -LiteralPath $PdfToolPath
 if ($pdfSignature.Status -ne 'Valid') { throw 'The owner-local PDF test tool does not have a valid Authenticode signature.' }
 $documents = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-if ($documents.schema -ne 'printbridge.m9.test-documents.v1' -or $documents.sequential_job_count -lt 20) {
+if ($documents.schema -ne 'quirewire.m9.test-documents.v1' -or $documents.sequential_job_count -lt 20) {
     throw 'The document manifest does not contain the required M9 sequential workload.'
 }
 $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($DataRoot)).TrimEnd('\')
@@ -66,9 +66,9 @@ if (-not $drive -or [uint64]$drive.FreeSpace -lt $MinimumFreeBytes) {
     throw "LOW_DISK: fewer than $MinimumFreeBytes bytes are free; no print job was submitted."
 }
 $statusText = @(& $cliPath status 2>&1 | ForEach-Object { $_.ToString() })
-if ($LASTEXITCODE -ne 0) { throw 'The PrintBridge agent is unavailable.' }
+if ($LASTEXITCODE -ne 0) { throw 'The QuireWire agent is unavailable.' }
 $status = ($statusText -join "`n") | ConvertFrom-Json
-if ($status.value.overall -ne 'ready') { throw "PrintBridge is not ready: $($status.value.overall)" }
+if ($status.value.overall -ne 'ready') { throw "QuireWire is not ready: $($status.value.overall)" }
 
 $selected = switch ($Action) {
     'Plan' { @($documents.jobs) }
@@ -92,7 +92,7 @@ foreach ($item in $selected) {
 }
 if ($Action -eq 'Plan') {
     [pscustomobject]@{
-        schema = 'printbridge.m9.application-plan.v1'
+        schema = 'quirewire.m9.application-plan.v1'
         printer = $PrinterName
         driver = $queue.DriverName
         jobs = $selected.Count
@@ -109,7 +109,7 @@ function Invoke-Guest([string]$Command) {
     try {
         $ErrorActionPreference = 'Continue'
         $output = @(& ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 `
-            -i $SshPrivateKeyPath -p 2244 printbridge@127.0.0.1 $Command 2>&1 | ForEach-Object { $_.ToString() })
+            -i $SshPrivateKeyPath -p 2244 quirewire@127.0.0.1 $Command 2>&1 | ForEach-Object { $_.ToString() })
         $code = $LASTEXITCODE
     }
     finally { $ErrorActionPreference = $previousErrorAction }
@@ -118,8 +118,8 @@ function Invoke-Guest([string]$Command) {
 }
 function Get-CupsJobIds([switch]$ActiveOnly) {
     $scope = if ($ActiveOnly) { 'not-completed' } else { 'all' }
-    @((Invoke-Guest "lpstat -W $scope -o PrintBridge_DCP_L2600D") | ForEach-Object {
-        if ($_ -match '^PrintBridge_DCP_L2600D-([0-9]+)\s') { [int]$Matches[1] }
+    @((Invoke-Guest "lpstat -W $scope -o QuireWire_DCP_L2600D") | ForEach-Object {
+        if ($_ -match '^QuireWire_DCP_L2600D-([0-9]+)\s') { [int]$Matches[1] }
     } | Sort-Object -Unique)
 }
 function Wait-NewCupsJob([int[]]$Before) {
@@ -201,7 +201,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $resultPath = Join-Path $OutputDirectory "$stamp-$($Action.ToLowerInvariant()).json"
 [ordered]@{
-    schema = 'printbridge.m9.application-soak.v1'
+    schema = 'quirewire.m9.application-soak.v1'
     recorded_utc = [DateTime]::UtcNow.ToString('o')
     action = $Action
     printer = $PrinterName
@@ -218,4 +218,4 @@ $resultPath = Join-Path $OutputDirectory "$stamp-$($Action.ToLowerInvariant()).j
     default_printer_preserved = $true
     physical_output = 'requires_owner_confirmation'
 } | ConvertTo-Json -Depth 9 | Set-Content -LiteralPath $resultPath -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m9.application-soak-result.v1'; path = $resultPath; jobs = $results.Count; physical_output = 'requires_owner_confirmation' } | ConvertTo-Json
+[pscustomobject]@{ schema = 'quirewire.m9.application-soak-result.v1'; path = $resultPath; jobs = $results.Count; physical_output = 'requires_owner_confirmation' } | ConvertTo-Json

@@ -88,7 +88,7 @@ fi
 stamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 record="$output_dir/${stamp}-linux-baseline-submission.txt"
 {
-  echo 'Schema: printbridge.m0.linux-baseline-submission.v1'
+  echo 'Schema: quirewire.m0.linux-baseline-submission.v1'
   echo "Submitted UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "Queue: $queue"
   echo "File: $print_file"

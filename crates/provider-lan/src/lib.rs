@@ -9,7 +9,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddrV4, UdpSocket};
 use std::time::{Duration, Instant};
 
 use mdns_sd::{IfKind, ServiceDaemon, ServiceInfo};
-use printbridge_domain::BridgeError;
+use quirewire_domain::BridgeError;
 
 pub const IPP_SERVICE_TYPE: &str = "_ipp._tcp.local.";
 pub const AIRPRINT_SERVICE_TYPE: &str = "_universal._sub._ipp._tcp.local.";
@@ -34,7 +34,7 @@ pub fn browse_live_advertisement(
     let deadline = Instant::now() + timeout;
     let printer_markers: [&[u8]; 4] = [
         instance_name.as_bytes(),
-        b"printers/PrintBridge_DCP_L2600D",
+        b"printers/QuireWire_DCP_L2600D",
         b"pdl=",
         b"URF=",
     ];
@@ -188,7 +188,7 @@ impl LanAdvertisement {
             ("TLS".into(), "none".into()),
             (
                 "note".into(),
-                "Shared by PrintBridge while the app is running".into(),
+                "Shared by QuireWire while the app is running".into(),
             ),
         ]);
         if !self.urf.is_empty() {
@@ -272,7 +272,7 @@ impl ScanAdvertisement {
             ),
             (
                 "note".into(),
-                "Shared by PrintBridge while the app is running".into(),
+                "Shared by QuireWire while the app is running".into(),
             ),
             ("cs".into(), bounded_csv(&color_spaces, &[], TXT_VALUE_MAX)),
             ("is".into(), bounded_csv(&input_sources, &[], TXT_VALUE_MAX)),
@@ -510,7 +510,7 @@ const fn bool_txt(value: bool) -> &'static str {
 fn lan_error(detail: impl Into<String>) -> BridgeError {
     BridgeError::GuestUnhealthy {
         detail: detail.into(),
-        action: "Keep PrintBridge on the explicitly approved local subnet and retry LAN sharing."
+        action: "Keep QuireWire on the explicitly approved local subnet and retry LAN sharing."
             .into(),
     }
 }
@@ -523,11 +523,11 @@ mod tests {
 
     fn advertisement() -> LanAdvertisement {
         LanAdvertisement {
-            instance_name: "Brother via PrintBridge".into(),
-            hostname: "printbridge-00000000.local.".into(),
+            instance_name: "Brother via QuireWire".into(),
+            hostname: "quirewire-00000000.local.".into(),
             address: Ipv4Addr::new(192, 168, 1, 10),
             port: 8644,
-            queue: "PrintBridge_DCP_L2600D".into(),
+            queue: "QuireWire_DCP_L2600D".into(),
             make_model: "Brother DCP-L2600D for CUPS".into(),
             formats: vec!["application/pdf".into(), "image/pwg-raster".into()],
             urf: vec!["V1.4".into(), "W8".into()],
@@ -541,7 +541,7 @@ mod tests {
     fn airprint_txt_is_truthful_and_contains_the_queue_resource() {
         let advertisement = advertisement();
         let properties = advertisement.properties();
-        assert_eq!(properties["rp"], "printers/PrintBridge_DCP_L2600D");
+        assert_eq!(properties["rp"], "printers/QuireWire_DCP_L2600D");
         assert_eq!(properties["pdl"], "image/pwg-raster,application/pdf");
         assert_eq!(properties["Color"], "F");
         assert_eq!(properties["Duplex"], "T");
@@ -549,7 +549,7 @@ mod tests {
         assert_eq!(properties["UUID"], "26263578-aca1-3e00-66bb-590c653b6fe7");
         assert_eq!(
             advertisement.fullname(),
-            "Brother via PrintBridge._ipp._tcp.local."
+            "Brother via QuireWire._ipp._tcp.local."
         );
         assert_eq!(AIRPRINT_SERVICE_TYPE, "_universal._sub._ipp._tcp.local.");
     }
@@ -593,8 +593,8 @@ mod tests {
     #[test]
     fn airscan_txt_uses_escl_and_truthful_formats() {
         let scanner = ScanAdvertisement {
-            instance_name: "Brother via PrintBridge Scanner".into(),
-            hostname: "printbridge-m4.local.".into(),
+            instance_name: "Brother via QuireWire Scanner".into(),
+            hostname: "quirewire-m4.local.".into(),
             address: Ipv4Addr::new(192, 168, 1, 10),
             port: 8645,
             make_model: "Brother DCP-L2600D".into(),
@@ -620,8 +620,8 @@ mod tests {
     #[test]
     fn airscan_rejects_capabilities_that_cannot_be_advertised_truthfully() {
         let mut scanner = ScanAdvertisement {
-            instance_name: "Brother via PrintBridge Scanner".into(),
-            hostname: "printbridge-m4.local.".into(),
+            instance_name: "Brother via QuireWire Scanner".into(),
+            hostname: "quirewire-m4.local.".into(),
             address: Ipv4Addr::new(192, 168, 1, 10),
             port: 8645,
             make_model: "Brother DCP-L2600D".into(),

@@ -1,4 +1,4 @@
-//! Framework-free PrintBridge domain contracts.
+//! Framework-free QuireWire domain contracts.
 
 mod doctor;
 mod error;

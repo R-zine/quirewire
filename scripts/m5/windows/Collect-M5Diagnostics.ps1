@@ -2,8 +2,8 @@
 param(
     [ValidateSet('Baseline', 'Installed', 'Restarted', 'Removed', 'Final')]
     [string]$Phase = 'Baseline',
-    [string]$PrinterName = 'Brother via PrintBridge',
-    [string]$IppUrl = 'http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D',
+    [string]$PrinterName = 'Brother via QuireWire',
+    [string]$IppUrl = 'http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D',
     [string]$OutputDirectory
 )
 
@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $null = New-Item -ItemType Directory -Force -Path $OutputDirectory
-$statePath = Join-Path $env:LOCALAPPDATA 'PrintBridge\m5-windows-printer.json'
+$statePath = Join-Path $env:LOCALAPPDATA 'QuireWire\m5-windows-printer.json'
 $providerScript = Join-Path $PSScriptRoot 'Invoke-M5WindowsPrinting.ps1'
 
 $addPrinter = Get-Command Add-Printer -ErrorAction SilentlyContinue
@@ -49,7 +49,7 @@ $providerExitCode = $LASTEXITCODE
 
 $os = Get-ComputerInfo -Property WindowsProductName, WindowsVersion, OsBuildNumber, OsArchitecture
 $report = [ordered]@{
-    schema = 'printbridge.m5.diagnostics.v1'
+    schema = 'quirewire.m5.diagnostics.v1'
     collectedUtc = [DateTime]::UtcNow.ToString('o')
     phase = $Phase
     caution = 'Spooler/job/CUPS completion does not prove physical paper output.'

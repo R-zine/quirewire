@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use printbridge_domain::BridgeError;
+use quirewire_domain::BridgeError;
 
 pub trait Clock {
     fn sleep(&mut self, duration: Duration);
@@ -74,7 +74,7 @@ where
 mod tests {
     use std::time::Duration;
 
-    use printbridge_domain::BridgeError;
+    use quirewire_domain::BridgeError;
 
     use super::{FakeClock, RetryPolicy, retry_with_clock};
 

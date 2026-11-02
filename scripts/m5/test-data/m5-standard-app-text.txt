@@ -1,10 +1,10 @@
-PrintBridge M5 standard-application text test
+QuireWire M5 standard-application text test
 
 Required path:
-Windows Notepad -> Brother via PrintBridge -> Microsoft IPP Class Driver
+Windows Notepad -> Brother via QuireWire -> Microsoft IPP Class Driver
 -> loopback VirtualBox NAT -> CUPS -> Linux driver -> USB printer
 
-Acceptance token: PRINTBRIDGE-M5-TEXT-2026
+Acceptance token: QUIREWIRE-M5-TEXT-2026
 
 This page is physical evidence only after the owner inspects the paper.
 Windows spooler acceptance and CUPS completion are not physical confirmation.

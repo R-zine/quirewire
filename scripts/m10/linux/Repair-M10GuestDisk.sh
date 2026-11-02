@@ -12,7 +12,7 @@ repository=$(readlink -f "$3")
 [[ -d "$output_directory" && -f "$source_raw" && ! -e "$output_raw" ]]
 [[ -f "$repository/guest/linux/configure-lan-cups.sh" ]]
 
-temporary=$(mktemp -d /var/tmp/printbridge-m10-guest-repair.XXXXXX)
+temporary=$(mktemp -d /var/tmp/quirewire-m10-guest-repair.XXXXXX)
 working="$temporary/working.raw"
 mountpoint="$temporary/root"
 mkdir "$mountpoint"
@@ -39,7 +39,7 @@ loop=$(losetup --find --show --partscan "$working")
 for partition in "${loop}"p*; do
   [[ -b "$partition" ]] || continue
   if mount -o ro "$partition" "$mountpoint" 2>/dev/null; then
-    if [[ -f "$mountpoint/etc/printbridge/guest.env" ]]; then
+    if [[ -f "$mountpoint/etc/quirewire/guest.env" ]]; then
       root_partition=$partition
       umount "$mountpoint"
       break
@@ -48,22 +48,22 @@ for partition in "${loop}"p*; do
   fi
 done
 [[ -n "$root_partition" ]] || {
-  echo 'ERROR: the clone has no exact PrintBridge guest root partition' >&2
+  echo 'ERROR: the clone has no exact QuireWire guest root partition' >&2
   exit 1
 }
 
 mount "$root_partition" "$mountpoint"
-grep -Fxq 'PRINTBRIDGE_GUEST_SCHEMA=printbridge.m4.guest.v1' \
-  "$mountpoint/etc/printbridge/guest.env"
-grep -Fxq 'QUEUE_NAME=PrintBridge_DCP_L2600D' \
-  "$mountpoint/etc/printbridge/guest.env"
+grep -Fxq 'QUIREWIRE_GUEST_SCHEMA=quirewire.m4.guest.v1' \
+  "$mountpoint/etc/quirewire/guest.env"
+grep -Fxq 'QUEUE_NAME=QuireWire_DCP_L2600D' \
+  "$mountpoint/etc/quirewire/guest.env"
 
 install -m 0755 "$repository/guest/linux/configure-lan-cups.sh" \
-  "$mountpoint/usr/local/lib/printbridge/configure-lan-cups.sh"
+  "$mountpoint/usr/local/lib/quirewire/configure-lan-cups.sh"
 install -m 0755 "$repository/guest/linux/provision-base.sh" \
-  "$mountpoint/usr/local/lib/printbridge/provision-base.sh"
+  "$mountpoint/usr/local/lib/quirewire/provision-base.sh"
 install -m 0755 "$repository/guest/linux/firstboot.sh" \
-  "$mountpoint/usr/local/lib/printbridge/firstboot.sh"
+  "$mountpoint/usr/local/lib/quirewire/firstboot.sh"
 
 mount --bind /dev "$mountpoint/dev"
 dev_bound=yes
@@ -71,8 +71,8 @@ mount -t proc proc "$mountpoint/proc"
 proc_bound=yes
 mount -t sysfs sysfs "$mountpoint/sys"
 sys_bound=yes
-chroot "$mountpoint" /usr/local/lib/printbridge/configure-lan-cups.sh
-grep -Fqx '# BEGIN PRINTBRIDGE M10 QUEUE-ONLY LAN ACCESS' \
+chroot "$mountpoint" /usr/local/lib/quirewire/configure-lan-cups.sh
+grep -Fqx '# BEGIN QUIREWIRE M10 QUEUE-ONLY LAN ACCESS' \
   "$mountpoint/etc/cups/cupsd.conf"
 sync
 

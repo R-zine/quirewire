@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$OutputDirectory,
-    [string]$PrinterName = 'Brother via PrintBridge POC',
+    [string]$PrinterName = 'Brother via QuireWire POC',
     [string]$IppUrl
 )
 
@@ -115,7 +115,7 @@ if ($null -ne $targetQueue) {
 }
 
 $report = [ordered]@{
-    schema = 'printbridge.m0.windows-diagnostics.v1'
+    schema = 'quirewire.m0.windows-diagnostics.v1'
     collectedUtc = [DateTime]::UtcNow.ToString('o')
     scopeNotice = 'Software-only inventory. Physical printing cannot be inferred from this report.'
     os = [ordered]@{
@@ -183,7 +183,7 @@ $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $jsonPath -Encodin
 
 $targetDriver = if ($null -eq $targetQueue) { '<queue not found>' } else { $targetQueue.DriverName }
 $summary = @"
-PrintBridge M0 Windows diagnostics
+QuireWire M0 Windows diagnostics
 Collected UTC: $($report.collectedUtc)
 OS registry display/build: $($currentVersion.DisplayVersion) $($currentVersion.CurrentBuild).$($currentVersion.UBR) ($([Runtime.InteropServices.RuntimeInformation]::OSArchitecture))
 Add-Printer -IppURL available: $($report.printManagement.addPrinterIppUrlSupported)

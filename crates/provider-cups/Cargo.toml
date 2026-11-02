@@ -1,12 +1,14 @@
 [package]
-name = "printbridge-provider-cups"
+name = "quirewire-provider-cups"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+authors.workspace = true
+license.workspace = true
 
 [dependencies]
-printbridge-domain = { path = "../domain" }
+quirewire-domain = { path = "../domain" }
 
 [lints]
 workspace = true

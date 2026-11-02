@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use printbridge_domain::{BridgeError, PrinterEndpoint, WindowsPrinting};
-use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
-use printbridge_provider_windows::WindowsPrintProvider;
+use quirewire_domain::{BridgeError, PrinterEndpoint, WindowsPrinting};
+use quirewire_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+use quirewire_provider_windows::WindowsPrintProvider;
 
-pub const M5_CONFIG_SCHEMA: &str = "printbridge.m5.config.v1";
+pub const M5_CONFIG_SCHEMA: &str = "quirewire.m5.config.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct M5Config {
@@ -55,7 +55,7 @@ impl M5Config {
         let printer_name = required(&values, "printer_name")?;
         if !valid_printer_name(printer_name) {
             return Err(config_error(
-                "printer_name must be 'Brother via PrintBridge' with at most one safe suffix",
+                "printer_name must be 'Brother via QuireWire' with at most one safe suffix",
             ));
         }
         let endpoint_port = required(&values, "endpoint_port")?
@@ -168,15 +168,15 @@ impl<P: WindowsPrinting> RequestHandler for M5AgentService<P> {
 
 #[must_use]
 pub const fn m5_help_text() -> &'static str {
-    "PrintBridge M5 CLI (real Windows IPP provider)\n\
-Usage: printbridgectl [--trace] --config <path> <command>\n\n\
+    "QuireWire M5 CLI (real Windows IPP provider)\n\
+Usage: quirewirectl [--trace] --config <path> <command>\n\n\
 Commands:\n\
   printer install      Idempotently create the marker-owned Windows IPP queue\n\
   printer status       Show spooler, endpoint, ownership, driver, port, and queue state\n\
   printer test-page    Submit one Windows test page; this proves spooler acceptance only\n\
   printer remove       Remove only the exact marker-owned queue; retain driver and port\n\
   help                 Show this help\n\n\
-Configuration schema: printbridge.m5.config.v1\n\
+Configuration schema: quirewire.m5.config.v1\n\
 The expected driver is Microsoft IPP Class Driver. Physical output always requires owner confirmation."
 }
 
@@ -188,7 +188,7 @@ fn required<'a>(values: &'a BTreeMap<String, String>, key: &str) -> Result<&'a s
 }
 
 fn valid_printer_name(value: &str) -> bool {
-    let prefix = "Brother via PrintBridge";
+    let prefix = "Brother via QuireWire";
     if value == prefix {
         return true;
     }
@@ -212,20 +212,20 @@ fn config_error(detail: impl Into<String>) -> BridgeError {
 
 #[cfg(test)]
 mod tests {
-    use printbridge_core::fake::FakePlatform;
-    use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+    use quirewire_core::fake::FakePlatform;
+    use quirewire_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
 
     use super::{M5AgentService, M5Config};
 
-    const CONFIG: &str = "schema=printbridge.m5.config.v1\n\
-printer_name=Brother via PrintBridge M5Test\n\
+    const CONFIG: &str = "schema=quirewire.m5.config.v1\n\
+printer_name=Brother via QuireWire M5Test\n\
 endpoint_port=8632\n\
 guest_queue=DCPL2600D\n";
 
     #[test]
     fn parses_bounded_loopback_configuration() {
         let config = M5Config::parse(CONFIG).expect("config");
-        assert_eq!(config.printer_name, "Brother via PrintBridge M5Test");
+        assert_eq!(config.printer_name, "Brother via QuireWire M5Test");
         assert_eq!(config.endpoint.port(), 8632);
         assert_eq!(config.endpoint.queue(), "DCPL2600D");
     }

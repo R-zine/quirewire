@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('UsbIdle', 'UsbDuringPrint', 'SleepResume', 'NoPaper')][string]$Scenario,
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$DocumentDirectory,
     [string]$PdfToolPath,
     [string]$OutputDirectory,
@@ -22,21 +22,21 @@ if ([string]::IsNullOrWhiteSpace($PdfToolPath)) {
 }
 $DataRoot = [IO.Path]::GetFullPath($DataRoot)
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
-$cliPath = Join-Path $DataRoot 'bin\printbridgectl.exe'
+$cliPath = Join-Path $DataRoot 'bin\quirewirectl.exe'
 $manifestPath = Join-Path $DataRoot 'installation.json'
 foreach ($required in @($cliPath, $manifestPath)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required manual-test dependency is absent: $required" }
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-if ($manifest.schema -ne 'printbridge.m8.installation.v1' -or $manifest.owner_sid -ne $ownerSid -or
+if ($manifest.schema -ne 'quirewire.m8.installation.v1' -or $manifest.owner_sid -ne $ownerSid -or
     [IO.Path]::GetFullPath($manifest.data_root) -ne $DataRoot) {
     throw 'The M8 manifest does not authorize this exact manual-test target.'
 }
 
 function Invoke-Cli([string[]]$Arguments) {
     $output = @(& $cliPath @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-    if ($LASTEXITCODE -ne 0) { throw "PrintBridge CLI failed: $($Arguments -join ' ')" }
+    if ($LASTEXITCODE -ne 0) { throw "QuireWire CLI failed: $($Arguments -join ' ')" }
     ($output -join "`n")
 }
 function Get-Status {
@@ -153,7 +153,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory "$stamp-$($Scenario.ToLowerInvariant()).json"
 [ordered]@{
-    schema = 'printbridge.m9.manual-scenario.v1'
+    schema = 'quirewire.m9.manual-scenario.v1'
     scenario = $Scenario
     started_utc = $started.ToString('o')
     completed_utc = [DateTime]::UtcNow.ToString('o')
@@ -162,4 +162,4 @@ $path = Join-Path $OutputDirectory "$stamp-$($Scenario.ToLowerInvariant()).json"
     test_print = if ($submission) { [ordered]@{ output = $submission; physical_output = 'requires_owner_confirmation' } } else { $null }
     physical_output = 'requires_owner_confirmation'
 } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m9.manual-result.v1'; path = $path; scenario = $Scenario; physical_output = 'requires_owner_confirmation' } | ConvertTo-Json
+[pscustomobject]@{ schema = 'quirewire.m9.manual-result.v1'; path = $path; scenario = $Scenario; physical_output = 'requires_owner_confirmation' } | ConvertTo-Json

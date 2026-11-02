@@ -21,7 +21,7 @@ if (Test-Path -LiteralPath $OutputDirectory -PathType Container) {
     }
     $ownedFiles = @(Get-ChildItem -LiteralPath $OutputDirectory -File -ErrorAction SilentlyContinue)
     if ($ownedFiles.Count -gt 0 -and
-        ($null -eq $existingManifest -or $existingManifest.schema -ne 'printbridge.m9.test-documents.v1')) {
+        ($null -eq $existingManifest -or $existingManifest.schema -ne 'quirewire.m9.test-documents.v1')) {
         throw 'Refusing to overwrite a non-empty document directory without the M9 ownership manifest.'
     }
     foreach ($file in $ownedFiles) {
@@ -55,7 +55,7 @@ function Write-TextPdf([string]$Path, [string]$TokenPrefix, [int]$Pages) {
 BT
 /F1 22 Tf
 72 720 Td
-(PrintBridge M9 release-candidate PDF) Tj
+(QuireWire M9 release-candidate PDF) Tj
 /F1 12 Tf
 0 -32 Td
 (Page $pageNumber of $Pages) Tj
@@ -102,9 +102,9 @@ $jobs = [Collections.Generic.List[object]]::new()
 for ($sequence = 1; $sequence -le $SequentialJobCount; $sequence++) {
     if (($sequence % 2) -eq 1) {
         $name = 'm9-job-{0:D2}.txt' -f $sequence
-        $token = 'PRINTBRIDGE-M9-TEXT-{0:D2}-2026' -f $sequence
+        $token = 'QUIREWIRE-M9-TEXT-{0:D2}-2026' -f $sequence
         $content = @(
-            'PrintBridge M9 sequential text job',
+            'QuireWire M9 sequential text job',
             "Sequence: $sequence of $SequentialJobCount",
             "Token: $token",
             'Windows spooler -> Microsoft IPP -> CUPS -> USB printer',
@@ -116,17 +116,17 @@ for ($sequence = 1; $sequence -le $SequentialJobCount; $sequence++) {
     }
     else {
         $name = 'm9-job-{0:D2}.pdf' -f $sequence
-        $token = 'PRINTBRIDGE-M9-PDF-{0:D2}-2026' -f $sequence
+        $token = 'QUIREWIRE-M9-PDF-{0:D2}-2026' -f $sequence
         Write-TextPdf -Path (Join-Path $OutputDirectory $name) -TokenPrefix $token -Pages 1
         $jobs.Add([ordered]@{ sequence = $sequence; name = $name; format = 'application/pdf'; token = $token })
     }
 }
 $longName = "m9-long-$LongPdfPages-page.pdf"
-$longToken = 'PRINTBRIDGE-M9-LONG-PDF-2026'
+$longToken = 'QUIREWIRE-M9-LONG-PDF-2026'
 Write-TextPdf -Path (Join-Path $OutputDirectory $longName) -TokenPrefix $longToken -Pages $LongPdfPages
 
 [ordered]@{
-    schema = 'printbridge.m9.test-documents.v1'
+    schema = 'quirewire.m9.test-documents.v1'
     generated_utc = [DateTime]::UtcNow.ToString('o')
     sequential_job_count = $SequentialJobCount
     jobs = $jobs
@@ -134,7 +134,7 @@ Write-TextPdf -Path (Join-Path $OutputDirectory $longName) -TokenPrefix $longTok
 } | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 
 [pscustomobject]@{
-    schema = 'printbridge.m9.test-documents-result.v1'
+    schema = 'quirewire.m9.test-documents-result.v1'
     directory = $OutputDirectory
     sequential_jobs = $SequentialJobCount
     text_jobs = @($jobs | Where-Object format -eq 'text/plain').Count

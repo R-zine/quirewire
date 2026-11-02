@@ -18,7 +18,7 @@ provisioner="$repository/guest/linux/provision-scanner.sh"
 [[ -f "$manifest" && -x "$provisioner" && -f "$brscan_deb" && \
   -f "$airsane_source" && -f "$airsane_patch" ]]
 
-temporary=$(mktemp -d /var/tmp/printbridge-m11-guest-repair.XXXXXX)
+temporary=$(mktemp -d /var/tmp/quirewire-m11-guest-repair.XXXXXX)
 working="$temporary/working.raw"
 mountpoint="$temporary/root"
 mkdir "$mountpoint"
@@ -66,7 +66,7 @@ done < <(lsblk -lnpo NAME,TYPE,MAJ:MIN "$loop")
 for partition in "${loop}"p*; do
   [[ -b "$partition" ]] || continue
   if mount -o ro "$partition" "$mountpoint" 2>/dev/null; then
-    if [[ -f "$mountpoint/etc/printbridge/guest.env" ]]; then
+    if [[ -f "$mountpoint/etc/quirewire/guest.env" ]]; then
       root_partition=$partition
       umount "$mountpoint"
       break
@@ -75,19 +75,19 @@ for partition in "${loop}"p*; do
   fi
 done
 [[ -n "$root_partition" ]] || {
-  echo 'ERROR: the clone has no exact PrintBridge guest root partition' >&2
+  echo 'ERROR: the clone has no exact QuireWire guest root partition' >&2
   exit 1
 }
 
 mount "$root_partition" "$mountpoint"
-grep -Fxq 'PRINTBRIDGE_GUEST_SCHEMA=printbridge.m4.guest.v1' \
-  "$mountpoint/etc/printbridge/guest.env"
-grep -Fxq 'QUEUE_NAME=PrintBridge_DCP_L2600D' \
-  "$mountpoint/etc/printbridge/guest.env"
+grep -Fxq 'QUIREWIRE_GUEST_SCHEMA=quirewire.m4.guest.v1' \
+  "$mountpoint/etc/quirewire/guest.env"
+grep -Fxq 'QUEUE_NAME=QuireWire_DCP_L2600D' \
+  "$mountpoint/etc/quirewire/guest.env"
 
-input="$mountpoint/var/tmp/printbridge-m11-input"
+input="$mountpoint/var/tmp/quirewire-m11-input"
 install -d -m 0700 "$input"
-install -m 0755 "$provisioner" "$mountpoint/usr/local/lib/printbridge/provision-scanner.sh"
+install -m 0755 "$provisioner" "$mountpoint/usr/local/lib/quirewire/provision-scanner.sh"
 install -m 0600 "$manifest" "$input/scanner.env"
 install -m 0600 "$brscan_deb" "$input/$(basename "$brscan_deb")"
 install -m 0600 "$airsane_source" "$input/$(basename "$airsane_source")"
@@ -110,18 +110,18 @@ rm -f "$mountpoint/etc/resolv.conf"
 cp -L /etc/resolv.conf "$mountpoint/etc/resolv.conf"
 resolv_replaced=yes
 
-chroot "$mountpoint" /usr/local/lib/printbridge/provision-scanner.sh \
-  --manifest /var/tmp/printbridge-m11-input/scanner.env \
-  --brscan-deb "/var/tmp/printbridge-m11-input/$(basename "$brscan_deb")" \
-  --airsane-source "/var/tmp/printbridge-m11-input/$(basename "$airsane_source")" \
-  --airsane-patch "/var/tmp/printbridge-m11-input/$(basename "$airsane_patch")" \
+chroot "$mountpoint" /usr/local/lib/quirewire/provision-scanner.sh \
+  --manifest /var/tmp/quirewire-m11-input/scanner.env \
+  --brscan-deb "/var/tmp/quirewire-m11-input/$(basename "$brscan_deb")" \
+  --airsane-source "/var/tmp/quirewire-m11-input/$(basename "$airsane_source")" \
+  --airsane-patch "/var/tmp/quirewire-m11-input/$(basename "$airsane_patch")" \
   --offline
 
 test -x "$mountpoint/usr/local/bin/airsaned"
-grep -Fxq 'schema=printbridge.m11.scanner-selection.v1' \
-  "$mountpoint/var/lib/printbridge/scanner-selection.env"
+grep -Fxq 'schema=quirewire.m11.scanner-selection.v1' \
+  "$mountpoint/var/lib/quirewire/scanner-selection.env"
 grep -Fxq "airsane_patch_sha256=$(sha256sum "$airsane_patch" | cut -d' ' -f1)" \
-  "$mountpoint/var/lib/printbridge/scanner-selection.env"
+  "$mountpoint/var/lib/quirewire/scanner-selection.env"
 grep -Fxq 'MDNS_ANNOUNCE=false' "$mountpoint/etc/default/airsane"
 grep -Fxq 'allow 10.0.0.0/8' "$mountpoint/etc/airsane/access.conf"
 grep -Fxq 'allow 172.16.0.0/12' "$mountpoint/etc/airsane/access.conf"

@@ -7,7 +7,7 @@ param(
     [int]$Port = 8644,
 
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
-    [string]$Queue = 'PrintBridge_DCP_L2600D'
+    [string]$Queue = 'QuireWire_DCP_L2600D'
 )
 
 Set-StrictMode -Version Latest
@@ -51,7 +51,7 @@ try {
     $valid = [int]$response.StatusCode -eq 200 -and $body.Length -ge 9 -and
         $body[0] -eq 2 -and $body[1] -eq 0 -and $body[2] -eq 0 -and $body[3] -eq 0
     [pscustomobject]@{
-        schema = 'printbridge.m10.lan-ipp-probe.v1'
+        schema = 'quirewire.m10.lan-ipp-probe.v1'
         ok = $valid
         endpoint = $printerUri
         http_status = [int]$response.StatusCode

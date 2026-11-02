@@ -61,7 +61,7 @@ Check 'remote pipe clients rejected' { $pipe -match 'reject_remote_clients\(true
 Check 'immutable state generations' { $agent -match 'create_new\(true\)' -and $agent -match 'state-\{:020\}\.json' }
 Check 'bounded 30-second backoff' { $agent -match 'MAX_BACKOFF.*30' }
 Check 'request ID idempotency cache' { $agent -match 'MAX_REQUEST_CACHE' -and $agent -match 'completed\.get' }
-Check 'accepted M4 schema required' { $agent -match 'printbridge\.m4\.acceptance-vm\.v1' }
+Check 'accepted M4 schema required' { $agent -match 'quirewire\.m4\.acceptance-vm\.v1' }
 Check 'interactive limited startup principal' {
     $startup -match 'LogonType Interactive' -and $startup -match 'RunLevel Limited'
 }
@@ -102,7 +102,7 @@ Check 'acceptance recorder cannot synthesize a physical pass' { $negativeRecord.
 
 Push-Location $repositoryRoot
 try {
-    & cargo.exe test -p printbridge-ipc -p printbridge-agent -p printbridgectl --all-features --offline
+    & cargo.exe test -p quirewire-ipc -p quirewire-agent -p quirewirectl --all-features --offline
     Check 'focused Rust test suites' { $LASTEXITCODE -eq 0 }
 }
 finally { Pop-Location }

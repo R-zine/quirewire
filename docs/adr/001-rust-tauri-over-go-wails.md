@@ -6,7 +6,7 @@
 
 ## Context
 
-PrintBridge needs a long-running, non-UI Windows controller, a small CLI, typed
+QuireWire needs a long-running, non-UI Windows controller, a small CLI, typed
 state and error contracts, provider isolation, and eventually a desktop/tray UI.
 The engine must continue when the UI is closed. The main implementation options
 considered were Rust with Tauri 2 and Go with Wails.
@@ -51,7 +51,7 @@ Reasons:
 
 Go would provide fast builds, straightforward concurrency, and a productive
 single-binary controller. Wails could provide a comparable web UI shell. It was
-not selected because PrintBridge benefits from Rust's compile-time ownership
+not selected because QuireWire benefits from Rust's compile-time ownership
 model around resource identity and cleanup, and the reference architecture
 already calls for Tauri 2. This is a tradeoff, not a claim that Go would exceed a
 resource budget; no comparative benchmark was run.

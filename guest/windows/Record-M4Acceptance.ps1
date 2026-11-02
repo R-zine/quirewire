@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $state = Get-Content -Raw -LiteralPath $StatePath | ConvertFrom-Json
-if ($state.schema -ne 'printbridge.m4.acceptance-state.v1') {
+if ($state.schema -ne 'quirewire.m4.acceptance-state.v1') {
     throw 'The supplied file is not an M4 acceptance state record.'
 }
 if (-not $state.fresh_ova_import -or -not $state.idempotent_reprovision -or $state.cups_health -ne 'pass') {
@@ -21,7 +21,7 @@ if (-not $state.physical_token) {
 }
 
 $record = [ordered]@{
-    schema = 'printbridge.m4.owner-acceptance.v1'
+    schema = 'quirewire.m4.owner-acceptance.v1'
     recorded_at_utc = (Get-Date).ToUniversalTime().ToString('o')
     physical_token = $state.physical_token
     physical_page_printed = ($PhysicalPagePrinted -eq 'yes')

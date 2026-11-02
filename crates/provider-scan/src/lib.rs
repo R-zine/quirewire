@@ -5,9 +5,9 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
-use printbridge_domain::{BridgeError, GuestScanning, ScannerCapabilities, ScannerEndpoint};
 use quick_xml::Reader;
 use quick_xml::events::Event;
+use quirewire_domain::{BridgeError, GuestScanning, ScannerCapabilities, ScannerEndpoint};
 
 const CAPABILITIES_PATH: &str = "/eSCL/ScannerCapabilities";
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
@@ -278,7 +278,7 @@ mod tests {
     use std::net::TcpListener;
     use std::thread;
 
-    use printbridge_domain::{GuestScanning, ScannerEndpoint};
+    use quirewire_domain::{GuestScanning, ScannerEndpoint};
 
     use super::EsclProvider;
 

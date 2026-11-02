@@ -6,7 +6,7 @@
 
 ## Context
 
-PrintBridge coordinates five external boundaries with different failure and
+QuireWire coordinates five external boundaries with different failure and
 privilege models: VirtualBox, whole-device USB capture, guest CUPS/IPP, Windows
 printing, and per-user startup. Direct calls from UI or orchestration code would
 make safety rules difficult to test and would couple the product to command-line

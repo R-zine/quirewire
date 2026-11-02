@@ -8,7 +8,7 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, ComponentState, ComponentStatus, DiagnosticEntry, GuestPrinting, JobId, JobState,
     PrintJob, PrintQueue, PrinterEndpoint,
 };
@@ -133,7 +133,7 @@ impl CupsIppProvider {
         } else {
             Err(BridgeError::PrinterMissing {
                 printer: queue.into(),
-                action: "Use the configured PrintBridge CUPS queue.".into(),
+                action: "Use the configured QuireWire CUPS queue.".into(),
             })
         }
     }
@@ -250,11 +250,11 @@ impl GuestPrinting for CupsIppProvider {
         let uri = endpoint_uri(&self.endpoint);
         let mut request = IppRequest::new(IPP_PRINT_JOB, self.request_id());
         request.operation_defaults(&uri);
-        request.attribute(0x42, "requesting-user-name", b"printbridge");
-        request.attribute(0x42, "job-name", b"PrintBridge IPP test page");
+        request.attribute(0x42, "requesting-user-name", b"quirewire");
+        request.attribute(0x42, "job-name", b"QuireWire IPP test page");
         request.attribute(0x49, "document-format", b"text/plain");
         let document =
-            b"PrintBridge IPP software test page\nPhysical output requires owner confirmation.\n";
+            b"QuireWire IPP software test page\nPhysical output requires owner confirmation.\n";
         let response = self.send(&self.endpoint, request.finish(document))?;
         let id = response
             .first_integer("job-id")
@@ -757,14 +757,14 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use printbridge_domain::{ComponentState, GuestPrinting, JobState, PrinterEndpoint};
+    use quirewire_domain::{ComponentState, GuestPrinting, JobState, PrinterEndpoint};
 
     use super::{CupsIppProvider, IppRequest};
 
     fn endpoint(port: u16) -> PrinterEndpoint {
         PrinterEndpoint::Loopback {
             port,
-            queue: "PrintBridge_DCP_L2600D".into(),
+            queue: "QuireWire_DCP_L2600D".into(),
         }
     }
 
@@ -861,7 +861,7 @@ mod tests {
 
     fn printer_attributes() -> Vec<u8> {
         ipp_response(&[
-            (0x42, "printer-name", b"PrintBridge_DCP_L2600D".to_vec()),
+            (0x42, "printer-name", b"QuireWire_DCP_L2600D".to_vec()),
             (
                 0x41,
                 "printer-make-and-model",
@@ -899,7 +899,7 @@ mod tests {
         let endpoint = endpoint(port);
         let provider = CupsIppProvider::new(endpoint.clone(), Duration::from_secs(2));
         let status = provider
-            .queue_status("PrintBridge_DCP_L2600D")
+            .queue_status("QuireWire_DCP_L2600D")
             .expect("healthy fixture");
         assert_eq!(status.state, ComponentState::Ready);
         let request = handle.join().expect("fixture thread");
@@ -912,7 +912,7 @@ mod tests {
             &0x000b_u16.to_be_bytes()
         );
         let request_text = String::from_utf8_lossy(&request);
-        assert!(request_text.contains("/printers/PrintBridge_DCP_L2600D"));
+        assert!(request_text.contains("/printers/QuireWire_DCP_L2600D"));
         assert_eq!(request_text.matches("requested-attributes").count(), 1);
     }
 
@@ -921,7 +921,7 @@ mod tests {
         let (port, handle) = serve_once(printer_attributes());
         let provider = CupsIppProvider::new(endpoint(port), Duration::from_secs(2));
         let queues = provider.list_queues().expect("queue listing");
-        assert_eq!(queues[0].name, "PrintBridge_DCP_L2600D");
+        assert_eq!(queues[0].name, "QuireWire_DCP_L2600D");
         assert_eq!(queues[0].driver, "Brother DCP-L2600D");
         handle.join().expect("fixture thread");
     }
@@ -949,7 +949,7 @@ mod tests {
         let (port, handle) = serve_once(body);
         let mut provider = CupsIppProvider::new(endpoint(port), Duration::from_secs(2));
         let job = provider
-            .submit_test_page("PrintBridge_DCP_L2600D")
+            .submit_test_page("QuireWire_DCP_L2600D")
             .expect("submit fixture");
         assert_eq!(job.id.0, 42);
         assert_eq!(job.state, JobState::Accepted);

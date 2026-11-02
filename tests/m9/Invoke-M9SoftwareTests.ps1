@@ -56,7 +56,7 @@ $limitations = Get-Content -Raw -LiteralPath (Join-Path $root 'docs\known-limita
 $release = Get-Content -Raw -LiteralPath (Join-Path $root 'docs\release-checklist.md')
 
 Check 'application soak is bound to exact marker-owned Microsoft IPP queue' {
-    $soak -match 'printbridge\.m5\.owned-printer\.v1' -and
+    $soak -match 'quirewire\.m5\.owned-printer\.v1' -and
         $soak -match 'Microsoft IPP Class Driver' -and $soak -match 'ownedComment' -and
         $soak -match "'/pt'" -and $soak -match "'-print-to'" -and
         $soak -match 'Get-AuthenticodeSignature' -and $soak -match 'lpstat -W' -and
@@ -73,8 +73,8 @@ Check 'metrics are redacted and compare explicit resource targets' {
         $metrics -notmatch '(?i)usb_serial|SerialNumber'
 }
 Check 'recovery mutations require exact VM ownership and preserve inventories' {
-    $recovery -match "Get-ExtraData 'PrintBridge/Schema'" -and
-        $recovery -match "Get-ExtraData 'PrintBridge/Owner'" -and
+    $recovery -match "Get-ExtraData 'QuireWire/Schema'" -and
+        $recovery -match "Get-ExtraData 'QuireWire/Owner'" -and
         $recovery.Contains("'controlvm', `$vmUuid, 'poweroff'") -and
         $recovery -notmatch "'unregistervm'|'--delete'|Remove-Printer"
 }
@@ -109,7 +109,7 @@ Check 'release checklist keeps public release blocked on signing and bounded phy
         $release -match 'Do not publish while any required item is unchecked'
 }
 
-$fixture = Join-Path ([IO.Path]::GetTempPath()) ('printbridge-m9-tests-' + [Guid]::NewGuid().ToString('N'))
+$fixture = Join-Path ([IO.Path]::GetTempPath()) ('quirewire-m9-tests-' + [Guid]::NewGuid().ToString('N'))
 try {
     $documents = Join-Path $fixture 'documents'
     $result = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
@@ -118,7 +118,7 @@ try {
     $manifestPath = Join-Path $documents 'manifest.json'
     $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
     Check 'document set has 10 text and 10 PDF sequential jobs' {
-        $manifest.schema -eq 'printbridge.m9.test-documents.v1' -and @($manifest.jobs).Count -eq 20 -and
+        $manifest.schema -eq 'quirewire.m9.test-documents.v1' -and @($manifest.jobs).Count -eq 20 -and
             @($manifest.jobs | Where-Object format -eq 'text/plain').Count -eq 10 -and
             @($manifest.jobs | Where-Object format -eq 'application/pdf').Count -eq 10
     }
@@ -142,7 +142,7 @@ try {
     }
 
     $evidence = Join-Path $fixture 'evidence.json'
-    @{ schema = 'printbridge.m9.test-evidence.v1' } | ConvertTo-Json | Set-Content -LiteralPath $evidence
+    @{ schema = 'quirewire.m9.test-evidence.v1' } | ConvertTo-Json | Set-Content -LiteralPath $evidence
     $scenarios = Join-Path $fixture 'scenarios'
     $recordOutput = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
         -File (Join-Path $root 'scripts\m9\windows\Record-M9Scenario.ps1') `
@@ -163,7 +163,7 @@ try {
     }
 
     $baseline = Join-Path $fixture 'baseline.json'; $final = Join-Path $fixture 'final.json'
-    $metricBase = @{ schema='printbridge.m9.metrics.v1'; phase='Baseline'; status_before=@{overall='ready'}; status_after=@{overall='ready'}; agent=@{pids=@(1)}; comparisons=@{agent_working_set='PASS';agent_average_cpu='PASS';guest_memory='PASS'}; storage=@{data_root_bytes_before=1;data_root_bytes_after=1;vm_directory_bytes_before=1;vm_directory_bytes_after=1} }
+    $metricBase = @{ schema='quirewire.m9.metrics.v1'; phase='Baseline'; status_before=@{overall='ready'}; status_after=@{overall='ready'}; agent=@{pids=@(1)}; comparisons=@{agent_working_set='PASS';agent_average_cpu='PASS';guest_memory='PASS'}; storage=@{data_root_bytes_before=1;data_root_bytes_after=1;vm_directory_bytes_before=1;vm_directory_bytes_after=1} }
     $metricFinal = $metricBase.Clone(); $metricFinal.phase='Final'
     $metricBase | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $baseline
     $metricFinal | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $final

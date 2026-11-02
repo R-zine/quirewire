@@ -1,4 +1,4 @@
-import type { PrintBridgeClient } from "./client";
+import type { QuireWireClient } from "./client";
 import type {
   AgentStatus,
   DeviceSummary,
@@ -23,7 +23,7 @@ const readyStatus = (): AgentStatus => ({
   },
   startup: {
     registered: false,
-    task_name: "\\PrintBridge\\Agent",
+    task_name: "\\QuireWire\\Agent",
     logoff_behavior: "On-demand mode; no login task.",
   },
   lan: {
@@ -31,14 +31,14 @@ const readyStatus = (): AgentStatus => ({
     interface_alias: "Ethernet",
     network_category: "private",
     address: "192.168.1.20",
-    endpoint: "ipp://192.168.1.20:8644/printers/PrintBridge_DCP_L2600D",
-    service_instance: "Brother via PrintBridge",
+    endpoint: "ipp://192.168.1.20:8644/printers/QuireWire_DCP_L2600D",
+    service_instance: "Brother via QuireWire",
   },
   scanner: {
     available: true,
     loopback_url: "http://127.0.0.1:8645/",
     lan_url: "http://192.168.1.20:8645/",
-    service_instance: "Brother via PrintBridge Scanner",
+    service_instance: "Brother via QuireWire Scanner",
     make_model: "Brother DCP-L2600D",
     sources: ["platen"],
     color_modes: ["Grayscale8", "RGB24"],
@@ -47,7 +47,7 @@ const readyStatus = (): AgentStatus => ({
   },
 });
 
-export class FakePrintBridgeClient implements PrintBridgeClient {
+export class FakeQuireWireClient implements QuireWireClient {
   readonly calls: string[] = [];
   status: AgentStatus = readyStatus();
   devices: DeviceSummary[] = [
@@ -61,8 +61,8 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
     },
   ];
 
-  static notConfigured(): FakePrintBridgeClient {
-    const client = new FakePrintBridgeClient();
+  static notConfigured(): FakeQuireWireClient {
+    const client = new FakeQuireWireClient();
     client.status = {
       ...readyStatus(),
       desired: "stopped",
@@ -129,10 +129,10 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
       generated_at_unix_ms: Date.now(),
       protocol_version: 7,
       owner_sid: "redacted-in-preview",
-      pipe_name: "PrintBridge owner-only pipe",
+      pipe_name: "QuireWire owner-only pipe",
       process_id: 1000,
-      state_path: "PrintBridge/state",
-      log_path: "PrintBridge/agent.jsonl",
+      state_path: "QuireWire/state",
+      log_path: "QuireWire/agent.jsonl",
       status: structuredClone(this.status),
       recent_events: [
         { sequence: 7, unix_ms: Date.now(), level: "info", event: "ready", detail: "All components are ready" },
@@ -147,13 +147,13 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
   }
   async exportDiagnostics() {
     this.calls.push("exportDiagnostics");
-    return "Documents\\PrintBridge\\diagnostics-fake.json";
+    return "Documents\\QuireWire\\diagnostics-fake.json";
   }
   async openScanner() {
     this.calls.push("openScanner");
   }
-  async exitPrintBridge() {
-    this.calls.push("exitPrintBridge");
+  async exitQuireWire() {
+    this.calls.push("exitQuireWire");
   }
 }
 

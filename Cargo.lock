@@ -2260,106 +2260,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
-name = "printbridge-agent"
-version = "0.1.0"
-dependencies = [
- "printbridge-core",
- "printbridge-domain",
- "printbridge-ipc",
- "printbridge-provider-cups",
- "printbridge-provider-lan",
- "printbridge-provider-scan",
- "printbridge-provider-virtualbox",
- "printbridge-provider-windows",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "printbridge-core"
-version = "0.1.0"
-dependencies = [
- "printbridge-domain",
-]
-
-[[package]]
-name = "printbridge-desktop"
-version = "0.1.0"
-dependencies = [
- "printbridge-ipc",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tokio",
-]
-
-[[package]]
-name = "printbridge-domain"
-version = "0.1.0"
-
-[[package]]
-name = "printbridge-ipc"
-version = "0.1.0"
-dependencies = [
- "printbridge-domain",
- "serde",
- "serde_json",
- "tokio",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "printbridge-provider-cups"
-version = "0.1.0"
-dependencies = [
- "printbridge-domain",
-]
-
-[[package]]
-name = "printbridge-provider-lan"
-version = "0.1.0"
-dependencies = [
- "mdns-sd",
- "printbridge-domain",
-]
-
-[[package]]
-name = "printbridge-provider-scan"
-version = "0.1.0"
-dependencies = [
- "printbridge-domain",
- "quick-xml",
-]
-
-[[package]]
-name = "printbridge-provider-virtualbox"
-version = "0.1.0"
-dependencies = [
- "printbridge-domain",
-]
-
-[[package]]
-name = "printbridge-provider-windows"
-version = "0.1.0"
-dependencies = [
- "printbridge-domain",
-]
-
-[[package]]
-name = "printbridgectl"
-version = "0.1.0"
-dependencies = [
- "printbridge-agent",
- "printbridge-core",
- "printbridge-domain",
- "printbridge-ipc",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "proc-macro-crate"
 version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2434,6 +2334,106 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "quirewire-agent"
+version = "0.1.0"
+dependencies = [
+ "quirewire-core",
+ "quirewire-domain",
+ "quirewire-ipc",
+ "quirewire-provider-cups",
+ "quirewire-provider-lan",
+ "quirewire-provider-scan",
+ "quirewire-provider-virtualbox",
+ "quirewire-provider-windows",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "quirewire-core"
+version = "0.1.0"
+dependencies = [
+ "quirewire-domain",
+]
+
+[[package]]
+name = "quirewire-desktop"
+version = "0.1.0"
+dependencies = [
+ "quirewire-ipc",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tokio",
+]
+
+[[package]]
+name = "quirewire-domain"
+version = "0.1.0"
+
+[[package]]
+name = "quirewire-ipc"
+version = "0.1.0"
+dependencies = [
+ "quirewire-domain",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "quirewire-provider-cups"
+version = "0.1.0"
+dependencies = [
+ "quirewire-domain",
+]
+
+[[package]]
+name = "quirewire-provider-lan"
+version = "0.1.0"
+dependencies = [
+ "mdns-sd",
+ "quirewire-domain",
+]
+
+[[package]]
+name = "quirewire-provider-scan"
+version = "0.1.0"
+dependencies = [
+ "quick-xml",
+ "quirewire-domain",
+]
+
+[[package]]
+name = "quirewire-provider-virtualbox"
+version = "0.1.0"
+dependencies = [
+ "quirewire-domain",
+]
+
+[[package]]
+name = "quirewire-provider-windows"
+version = "0.1.0"
+dependencies = [
+ "quirewire-domain",
+]
+
+[[package]]
+name = "quirewirectl"
+version = "0.1.0"
+dependencies = [
+ "quirewire-agent",
+ "quirewire-core",
+ "quirewire-domain",
+ "quirewire-ipc",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

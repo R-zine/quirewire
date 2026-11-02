@@ -1,15 +1,15 @@
-# PrintBridge — Codex Implementation Specification
+# QuireWire — Codex Implementation Specification
 
-> **M10 direction change (2026-10-30):** PrintBridge is now an on-demand
+> **M10 direction change (2026-10-30):** QuireWire is now an on-demand
 > household-LAN bridge. This section and the M10 milestone supersede earlier
 > M6–M9 requirements for login startup, UI-independent operation, loopback-only
 > printing, and “Exit UI”. Historical milestone reports remain evidence of what
 > was tested at the time; they are not the current lifecycle contract.
 
 > **M11 direction change (2026-10-31):** The selected multifunction device's
-> scanner is now in scope while PrintBridge is running. M11 adds a SANE-backed
+> scanner is now in scope while QuireWire is running. M11 adds a SANE-backed
 > eSCL/AirScan service for the local Windows host and explicitly approved
-> household LAN. “All consumers” means the PrintBridge desktop/browser path,
+> household LAN. “All consumers” means the QuireWire desktop/browser path,
 > CLI diagnostics, Windows Ready Print/Windows Scan, Android Mopria Scan, and
 > standards-compatible macOS/Linux eSCL clients. It does not mean every
 > proprietary vendor application or routed/cloud access.
@@ -43,7 +43,7 @@ This repository should be developed **one independently verifiable milestone at 
 
 ### User story
 
-A user plugs in a USB printer that works with Linux but no longer works with vendor Windows drivers, installs PrintBridge, chooses the USB device once, and obtains a printer named `Brother via PrintBridge` in Windows. When the user opens PrintBridge, its headless VM starts and the printer becomes available both to Windows and to phones/computers on the same trusted local network. Closing the window to the tray keeps sharing active; explicit Exit stops discovery, the agent, and the VM so they consume no ongoing memory. The app displays useful errors and can be cleanly uninstalled.
+A user plugs in a USB printer that works with Linux but no longer works with vendor Windows drivers, installs QuireWire, chooses the USB device once, and obtains a printer named `Brother via QuireWire` in Windows. When the user opens QuireWire, its headless VM starts and the printer becomes available both to Windows and to phones/computers on the same trusted local network. Closing the window to the tray keeps sharing active; explicit Exit stops discovery, the agent, and the VM so they consume no ongoing memory. The app displays useful errors and can be cleanly uninstalled.
 
 ### Must-have outcomes
 
@@ -53,7 +53,7 @@ A user plugs in a USB printer that works with Linux but no longer works with ven
 - One-click onboarding after prerequisites are installed, one-time user approval for selecting/capturing the USB device, readable health status, recovery after printer reconnect/reboot, and a test-page action.
 - Idempotent installation and setup, safe repair, controlled restart, diagnostics export, clean uninstallation preserving third-party assets.
 - No Brother-specific Windows printer driver required. Expose only the selected IPP queue on one explicitly approved Windows interface and IPv4 subnet; never expose CUPS administration, SSH, named-pipe control, or arbitrary guest services to the LAN.
-- Advertise the queue with DNS-SD (`_ipp._tcp`) using capabilities actually reported by CUPS so AirPrint/Mopria-compatible clients can discover it while PrintBridge is running.
+- Advertise the queue with DNS-SD (`_ipp._tcp`) using capabilities actually reported by CUPS so AirPrint/Mopria-compatible clients can discover it while QuireWire is running.
 - Expose the selected scanner through a guest SANE backend and eSCL/AirScan,
   advertised as `_uscan._tcp` only on the same explicitly approved interface
   and subnet. Provide a browser fallback so a native scan client is not
@@ -82,7 +82,7 @@ A user plugs in a USB printer that works with Linux but no longer works with ven
 Windows desktop (Tauri 2 / React + TypeScript)
              | versioned local IPC only
              v
-Rust PrintBridge Agent (background, non-UI)
+Rust QuireWire Agent (background, non-UI)
   | State / orchestration / diagnostics / retries
   +-- HypervisorProvider (initial: VirtualBox CLI adapter)
   +-- UsbProvider        (initial: VirtualBox USB host discovery/filter)
@@ -104,22 +104,22 @@ Windows/LAN scan clients --> DNS-SD + approved-interface/subnet eSCL forward-+
                          guest print/scan drivers --> USB multifunction device
 ```
 
-**Hard architectural rule:** UI does not import VirtualBox, printer setup scripts, or USB code. `printbridgectl` also talks to the same agent API. Provider implementations cannot import the UI crate. Rust domain/core crates contain no Tauri symbols.
+**Hard architectural rule:** UI does not import VirtualBox, printer setup scripts, or USB code. `quirewirectl` also talks to the same agent API. Provider implementations cannot import the UI crate. Rust domain/core crates contain no Tauri symbols.
 
 ### Service model
 
-- `printbridge-agent.exe`: per-user on-demand supervisor launched hidden by the desktop. It holds a renewable desktop heartbeat lease and shuts down sharing plus the owned VM if the lease expires.
-- `printbridgectl.exe`: development/debug CLI and scriptable control client.
-- `printbridge-desktop.exe`: Tauri UI/tray owner. Window close hides to the tray; explicit Exit sends graceful shutdown and does not exit silently if VM shutdown fails.
+- `quirewire-agent.exe`: per-user on-demand supervisor launched hidden by the desktop. It holds a renewable desktop heartbeat lease and shuts down sharing plus the owned VM if the lease expires.
+- `quirewirectl.exe`: development/debug CLI and scriptable control client.
+- `quirewire-desktop.exe`: Tauri UI/tray owner. Window close hides to the tray; explicit Exit sends graceful shutdown and does not exit silently if VM shutdown fails.
 - Use a versioned **Windows named pipe** for command/status IPC with ACL restricted to the owning user SID; avoid public HTTP control endpoints. A polling API is sufficient initially, with optional event streaming after the model stabilizes.
 - Only the selected VM is managed. Track its UUID and ownership marker, never operate by ambiguous display name alone.
 - The agent reconciles desired/observed state after startup or failure and uses bounded backoff, not tight polling.
-- The installer and agent remove the exact legacy PrintBridge login task. They never create a replacement startup entry.
+- The installer and agent remove the exact legacy QuireWire login task. They never create a replacement startup entry.
 
 ### Concrete module layout
 
 ```text
-printbridge/
+quirewire/
   Cargo.toml
   crates/
     domain/                   # data types, state, error taxonomy, traits
@@ -131,7 +131,7 @@ printbridge/
     provider-windows/         # Windows IPP printer/USB/system integration
     ipc/                      # versioned named-pipe protocol
     agent/                    # background executable
-    cli/                      # printbridgectl executable
+    cli/                      # quirewirectl executable
   apps/desktop/               # Tauri 2 + React/TypeScript UI
   guest/                      # pinned OS image config and CUPS provisioning
   scripts/                    # feasibility probes, setup/cleanup/runbooks
@@ -196,7 +196,7 @@ captured image is correct until a person inspects it.
   exit the agent. Uninstall removes only exact marker-owned firewall rules.
 - If loopback-forwarded IPP fails for a protocol/URI reason, test a private host-only adapter with stable guest IP as the documented fallback. Keep the alternative behind `PrinterEndpoint`/network configuration rather than hardcoding it everywhere.
 - Keep the CUPS `--no-remote-admin --no-remote-any` baseline, then add one
-  marker-delimited guest rule allowing only `/printers/PrintBridge_DCP_L2600D`
+  marker-delimited guest rule allowing only `/printers/QuireWire_DCP_L2600D`
   through the scoped host forward. AirSane may expose only its eSCL paths and
   bounded web interface through the separate forward; disable guest Avahi
   publication because host DNS-SD owns approved-interface scope. Keep CUPS `/`,
@@ -232,7 +232,7 @@ captured image is correct until a person inspects it.
 
 - Create `scripts/feasibility/` with documented PowerShell/Linux scripts to capture versions, printer USB IDs, Linux queue name, CUPS configuration, relevant log snippets, and Windows printer driver metadata.
 - Use the **existing working Linux machine** first, with the Brother USB printer physically connected there; configure the working CUPS queue to share over IPP on a trusted local network. This deliberately removes the VM from the experiment.
-- From Windows, attempt manual addition via the IPP URL and via `Add-Printer -Name "Brother via PrintBridge POC" -IppURL <validated-url>` where available. Confirm installed Windows driver is Microsoft's inbox IPP driver, not a Brother driver. Test direct IPP printing from Word/Notepad/PDF viewer.
+- From Windows, attempt manual addition via the IPP URL and via `Add-Printer -Name "Brother via QuireWire POC" -IppURL <validated-url>` where available. Confirm installed Windows driver is Microsoft's inbox IPP driver, not a Brother driver. Test direct IPP printing from Word/Notepad/PDF viewer.
 - Print a known one-page text document, a one-page PDF with images, and (if supported) a page exercising color/duplex. Record whether media options and job completion work.
 - Capture CUPS IPP attributes (`Get-Printer-Attributes` via suitable tooling), Windows job error details, CUPS `error_log` where needed, and physical print results. Test Windows Protected Print Mode only without changing policies unexpectedly.
 - Create `docs/feasibility.md` with explicit `PASS`, `FAIL`, or `BLOCKED` plus machine-specific evidence. Ensure scripts are safe and reversible.
@@ -263,7 +263,7 @@ captured image is correct until a person inspects it.
 
 - Initialize Cargo workspace and crate boundaries shown above. Write ADR-001 (Rust/Tauri vs Go/Wails, including measured/controller-vs-VM overhead rationale) and ADR-002 (hypervisor/provider boundaries).
 - Define error types (`MissingDependency`, `PermissionDenied`, `UsbBusy`, `PrinterMissing`, `GuestUnhealthy`, `IppNegotiationFailed`, `PortConflict`, `UnsupportedDriver`, `Timeout`, `Internal`) and typed status objects.
-- Implement command-line `printbridgectl status`, `doctor`, `help` using a **fake in-memory provider**. Add structured tracing with safe defaults and redaction.
+- Implement command-line `quirewirectl status`, `doctor`, `help` using a **fake in-memory provider**. Add structured tracing with safe defaults and redaction.
 - Implement state-machine tests, retry/backoff tests using fake clock where needed, and interface contract tests. Set up formatting/lint/CI (`cargo fmt`, `clippy`, tests, frontend later).
 
 **PASS:** All state transitions/error mapping can be exercised without hardware; no Tauri, Windows API, or VirtualBox access leaks into the domain crates.
@@ -273,7 +273,7 @@ captured image is correct until a person inspects it.
 **Implement:**
 
 - Discover installation/version of VBoxManage; reject unsupported/incompatible versions with actionable messages.
-- Import/register/start/stop **only** the VM owned by PrintBridge; safely query actual state. Use `startvm <UUID> --type headless`.
+- Import/register/start/stop **only** the VM owned by QuireWire; safely query actual state. Use `startvm <UUID> --type headless`.
 - Discover USB devices via supported VirtualBox interface; select exact VID:PID plus serial when available; apply filters and verify attachment; handle serial-less duplicates interactively.
 - Validate virtualization prerequisites, permission failures, device-busy errors, and USB detach/reconnect. Do not accidentally capture unrelated devices or remove a user's preexisting filters.
 - Implement CLI: `doctor`, `vm status`, `vm start`, `vm stop`, `usb list`, `usb attach`, `usb release`.
@@ -297,7 +297,7 @@ captured image is correct until a person inspects it.
 **Implement:**
 
 - Implement `WindowsPrinting` adapter around supported Windows PrintManagement/IPP integration. Detect printer already registered, driver actually selected, queue name/path, spooler state and `-IppURL` support on installed build.
-- Register an **owned** Windows queue to the correct stable guest endpoint. Implement `printbridgectl printer install`, `status`, `test-page`, `remove` with safe idempotence.
+- Register an **owned** Windows queue to the correct stable guest endpoint. Implement `quirewirectl printer install`, `status`, `test-page`, `remove` with safe idempotence.
 - Do not remove/change unrelated printer queues or default printer. Do not silently downgrade to a Brother Windows driver. Support guided manual fallback if IPP registration requires UI on a specific Windows build.
 - Distinguish spooler submit from actual CUPS processing; log correlation ID where available.
 
@@ -307,7 +307,7 @@ captured image is correct until a person inspects it.
 
 **Implement:**
 
-- Implement the standalone `printbridge-agent` process with versioned local named-pipe IPC, per-user ACL, single-instance enforcement, bounded state reconciler, structured logging, and observable events.
+- Implement the standalone `quirewire-agent` process with versioned local named-pipe IPC, per-user ACL, single-instance enforcement, bounded state reconciler, structured logging, and observable events.
 - Provide `GetStatus`, `DiscoverDevices`, `BeginSetup`, `Start`, `Stop`, `Restart`, `TestPrint`, `GetDiagnostics` and `Repair` commands with explicit error/status payloads. Never permit arbitrary command execution through IPC.
 - Enable per-user login startup with Task Scheduler; agent restarts/reconciles VM+CUPS+USB+Windows queue while UI remains closed. Safely handle resume/sleep, USB unplug/replug, CUPS restart, host printer spooler restart and port conflict.
 - Ensure processes and jobs are not duplicated by two agent/UI starts. Persist owned resource IDs and desired state atomically.
@@ -341,7 +341,7 @@ captured image is correct until a person inspects it.
 **Implement:**
 
 - Windows integration test suite + a bounded manual hardware matrix. Baseline VM memory, agent RSS/CPU, cold startup, print latency, idle-disconnect recovery, and disk growth; compare against accepted targets.
-- The M9 release gate requires: 20 sequential text/PDF jobs; a long PDF; device unplug/reconnect while idle; VM crash; Windows spooler restart; CUPS restart; port conflict; second PrintBridge instance; low-disk guard; and cold start. These checks exercise the release-candidate print path and recovery behavior without repeatedly consuming paper for every environmental stress case.
+- The M9 release gate requires: 20 sequential text/PDF jobs; a long PDF; device unplug/reconnect while idle; VM crash; Windows spooler restart; CUPS restart; port conflict; second QuireWire instance; low-disk guard; and cold start. These checks exercise the release-candidate print path and recovery behavior without repeatedly consuming paper for every environmental stress case.
 - Keep USB-during-print, host-reboot, sleep/resume, and no-paper scripts as optional, non-gating stress checks. Do not require M9 repeats of normal-app text/PDF, uninstall/reinstall, or UI-closed printing while the applicable M0/M5, M8, and M6 physical gates remain valid and M9 has not changed product binaries. Never report a deferred check as passed unless it was actually run.
 - Clearly identify which outcomes cannot be reliably automatically detected (e.g., a physically printed page with no printer telemetry).
 - Write end-user install/usage/troubleshooting guide, developer build/test guide, security and licensing notes, known limitations, and release checklist.
@@ -360,7 +360,7 @@ captured image is correct until a person inspects it.
 
 **Software gate:** Protocol/provider/unit/frontend tests pass; PowerShell parses; missing/mismatched approval produces an actionable unavailable status and no LAN advertisement/forward; exact firewall interface/subnet/program/port scope, NAT ownership, and cleanup are tested; the legacy login task is absent.
 
-**Physical gate (bounded):** With the active Windows interface and directly attached local subnet explicitly approved (the reference host is `Ethernet 3`, `192.168.100.0/24`, category Public) and one phone/computer on that same non-isolated LAN: open PrintBridge; confirm the device discovers `Brother via PrintBridge`; print one small page from that LAN device and confirm physical output; explicitly Exit; confirm the VM and agent stop and the LAN printer becomes unavailable. No M11 work or M10 commit before this physical result is recorded.
+**Physical gate (bounded):** With the active Windows interface and directly attached local subnet explicitly approved (the reference host is `Ethernet 3`, `192.168.100.0/24`, category Public) and one phone/computer on that same non-isolated LAN: open QuireWire; confirm the device discovers `Brother via QuireWire`; print one small page from that LAN device and confirm physical output; explicitly Exit; confirm the VM and agent stop and the LAN printer becomes unavailable. No M11 work or M10 commit before this physical result is recorded.
 
 **PASS:** `PASS: PHYSICAL` only after the bounded LAN print and explicit-exit checks above. Otherwise report `BLOCKED: REQUIRES HARDWARE` even if every software test passes.
 
@@ -382,7 +382,7 @@ captured image is correct until a person inspects it.
   exact VirtualBox NAT ownership/collision rules, separately approved TCP 8645
   Windows Firewall scope, and `_uscan._tcp.local.` advertisement populated from
   the live eSCL capabilities. Exit, lease loss, repair and uninstall must clean
-  up only PrintBridge-owned scan resources.
+  up only QuireWire-owned scan resources.
 - Add a desktop Scan screen with readiness, capability and privacy guidance,
   plus an **Open scanner** action using the loopback web endpoint. Add matching
   CLI status/URL diagnostics. Windows uses its inbox eSCL support; Android uses
@@ -399,7 +399,7 @@ uninstall preserve unrelated VMs, firewall rules, scanners and user files.
 
 **Physical gate (bounded, no paper consumed):** With one document on the
 flatbed, prove `scanimage -L` and a small acquisition as the guest service user;
-inspect one image from the PrintBridge browser path; scan once in Windows Scan;
+inspect one image from the QuireWire browser path; scan once in Windows Scan;
 scan once on the approved-subnet Android device using Mopria Scan; confirm each
 image is the intended document and legible. Explicit Exit must make the eSCL
 and web endpoints unavailable and power off the owned VM. macOS/Linux native
@@ -452,8 +452,8 @@ HARDWARE`; do not start M12 or commit M11.
 | Resource budget and soak test | n/a | baseline | measured/passed |
 
 **Definition of done:** A nondeveloper on the supported Windows host can
-install/configure and open PrintBridge, hide its window to the tray, select
-`Brother via PrintBridge` in Windows or discover it from a phone on the
+install/configure and open QuireWire, hide its window to the tray, select
+`Brother via QuireWire` in Windows or discover it from a phone on the
 explicitly approved same LAN, and reliably print a real page. The same selected
 multifunction device is available for a real scan through Windows inbox eSCL,
 Android Mopria Scan and the browser fallback while the app is running. Explicit
@@ -506,4 +506,4 @@ Recheck current documentation against the versions installed at implementation t
 
 ### Start-here prompt for Codex
 
-> Implement PrintBridge following this specification. Begin with M0 only: inspect the repository and environment, create reproducible feasibility scripts and `docs/feasibility.md`, run all safe software-only checks available, and write the exact owner-executed Windows/Linux hardware acceptance steps. Do not build the full application or UI before the physical Windows → Linux → USB printer test passes. For every subsequent milestone, implement concrete functionality, add tests, document results, and respect hard hardware gates. Be explicit when a claim could not be verified in your execution environment.
+> Implement QuireWire following this specification. Begin with M0 only: inspect the repository and environment, create reproducible feasibility scripts and `docs/feasibility.md`, run all safe software-only checks available, and write the exact owner-executed Windows/Linux hardware acceptance steps. Do not build the full application or UI before the physical Windows → Linux → USB printer test passes. For every subsequent milestone, implement concrete functionality, add tests, document results, and respect hard hardware gates. Be explicit when a claim could not be verified in your execution environment.

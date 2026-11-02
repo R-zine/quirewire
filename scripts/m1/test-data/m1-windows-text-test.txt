@@ -1,4 +1,4 @@
-PrintBridge M1 Windows IPP text test
+QuireWire M1 Windows IPP text test
 ===================================
 
 Required path:
@@ -9,7 +9,7 @@ Confirm on the physical sheet:
 [ ] The title and this checklist are legible.
 [ ] No text is clipped at the page edges.
 [ ] The complete path above is readable.
-[ ] This token is present: PRINTBRIDGE-M1-WINDOWS-TEXT-2026
+[ ] This token is present: QUIREWIRE-M1-WINDOWS-TEXT-2026
 
-Queue: Brother via PrintBridge M1
+Queue: Brother via QuireWire M1
 Milestone stage: initial Windows-through-M1 print before reboot/reconnect tests

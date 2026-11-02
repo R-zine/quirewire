@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use printbridge_domain::BridgeError;
+use quirewire_domain::BridgeError;
 
-pub const HEADER: &str = "PRINTBRIDGE_WINDOWS_V1";
+pub const HEADER: &str = "QUIREWIRE_WINDOWS_V1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProviderRecord {
@@ -146,21 +146,18 @@ mod tests {
     #[test]
     fn parses_typed_and_utf8_fields() {
         let record = ProviderRecord::parse(
-            "PRINTBRIDGE_WINDOWS_V1\nok=true\nname=QnJvdGhlciB2aWEgUHJpbnRCcmlkZ2U=\ncount=42\n",
+            "QUIREWIRE_WINDOWS_V1\nok=true\nname=QnJvdGhlciB2aWEgUXVpcmVXaXJl\ncount=42\n",
         )
         .expect("record");
         assert!(record.boolean("ok").expect("bool"));
-        assert_eq!(
-            record.text("name").expect("text"),
-            "Brother via PrintBridge"
-        );
+        assert_eq!(record.text("name").expect("text"), "Brother via QuireWire");
         assert_eq!(record.optional_u32("count").expect("number"), Some(42));
     }
 
     #[test]
     fn rejects_duplicate_fields_and_invalid_encoding() {
-        assert!(ProviderRecord::parse("PRINTBRIDGE_WINDOWS_V1\nok=true\nok=false\n").is_err());
-        let invalid = ProviderRecord::parse("PRINTBRIDGE_WINDOWS_V1\nname=***=\n").expect("syntax");
+        assert!(ProviderRecord::parse("QUIREWIRE_WINDOWS_V1\nok=true\nok=false\n").is_err());
+        let invalid = ProviderRecord::parse("QUIREWIRE_WINDOWS_V1\nname=***=\n").expect("syntax");
         assert!(invalid.text("name").is_err());
     }
 }

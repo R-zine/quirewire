@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use printbridge_ipc::{
+use quirewire_ipc::{
     AgentStatus, Command, CommandResult, DeviceSummary, Diagnostics, ErrorPayload, OperationResult,
     Payload, RequestEnvelope, TestPrintResult, WireError,
 };
@@ -24,9 +24,7 @@ impl DesktopError {
         Self {
             code: "desktop_protocol_error".into(),
             message: message.into(),
-            action: Some(
-                "Update PrintBridge so the desktop and agent use the same protocol.".into(),
-            ),
+            action: Some("Update QuireWire so the desktop and agent use the same protocol.".into()),
             retryable: false,
         }
     }
@@ -36,7 +34,7 @@ impl DesktopError {
             code: "agent_unavailable".into(),
             message: message.into(),
             action: Some(
-                "Keep PrintBridge open while its on-demand engine starts, then try again.".into(),
+                "Keep QuireWire open while its on-demand engine starts, then try again.".into(),
             ),
             retryable: true,
         }
@@ -47,7 +45,7 @@ impl DesktopError {
             code: "desktop_runtime_error".into(),
             message: message.into(),
             action: Some(
-                "Repair PrintBridge and verify the installed agent and configuration.".into(),
+                "Repair QuireWire and verify the installed agent and configuration.".into(),
             ),
             retryable: true,
         }
@@ -69,7 +67,7 @@ impl From<WireError> for DesktopError {
     fn from(value: WireError) -> Self {
         match value {
             WireError::Io(error) => {
-                Self::unavailable(format!("Cannot reach the PrintBridge agent: {error}"))
+                Self::unavailable(format!("Cannot reach the QuireWire agent: {error}"))
             }
             other => Self::protocol(other.to_string()),
         }
@@ -128,7 +126,7 @@ impl AgentClient {
             let sid = if let Some(value) = self.owner_sid.get() {
                 value
             } else {
-                let value = printbridge_ipc::windows_pipe::current_user_sid().map_err(|error| {
+                let value = quirewire_ipc::windows_pipe::current_user_sid().map_err(|error| {
                     DesktopError::unavailable(format!(
                         "Cannot identify the current Windows user: {error}"
                     ))
@@ -138,13 +136,13 @@ impl AgentClient {
                     DesktopError::unavailable("Cannot cache the Windows owner SID.")
                 })?
             };
-            let pipe_name = printbridge_ipc::windows_pipe::pipe_name_for_sid(sid);
-            printbridge_ipc::windows_pipe::send(&pipe_name, &request, REQUEST_TIMEOUT).await?
+            let pipe_name = quirewire_ipc::windows_pipe::pipe_name_for_sid(sid);
+            quirewire_ipc::windows_pipe::send(&pipe_name, &request, REQUEST_TIMEOUT).await?
         };
 
         #[cfg(not(windows))]
         return Err(DesktopError::unavailable(
-            "The PrintBridge desktop is supported only on Windows.",
+            "The QuireWire desktop is supported only on Windows.",
         ));
 
         #[cfg(windows)]
@@ -190,7 +188,7 @@ fn payload_name(payload: &Payload) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use printbridge_ipc::ErrorPayload;
+    use quirewire_ipc::ErrorPayload;
 
     use super::{AgentClient, DesktopError};
 

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use printbridge_domain::{BridgeError, UsbIdentity};
+use quirewire_domain::{BridgeError, UsbIdentity};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VBoxVersion {
@@ -294,7 +294,7 @@ mod tests {
     #[test]
     fn parses_machine_state_and_exact_filter() {
         let values = parse_machine_readable(
-            "UUID=\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"\nVMState=\"running\"\nUSBFilterActive1=\"on\"\nUSBFilterName1=\"PrintBridge M3 owned\"\nUSBFilterVendorId1=\"04f9\"\nUSBFilterProductId1=\"0567\"\nUSBFilterSerialNumber1=\"secret\"\nUSBFilterRemote1=\"no\"\n",
+            "UUID=\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"\nVMState=\"running\"\nUSBFilterActive1=\"on\"\nUSBFilterName1=\"QuireWire M3 owned\"\nUSBFilterVendorId1=\"04f9\"\nUSBFilterProductId1=\"0567\"\nUSBFilterSerialNumber1=\"secret\"\nUSBFilterRemote1=\"no\"\n",
         );
         assert_eq!(
             VmPowerState::parse(&values["VMState"]),

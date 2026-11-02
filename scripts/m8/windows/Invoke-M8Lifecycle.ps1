@@ -8,22 +8,22 @@ param(
     [Parameter(Mandatory)]
     [string]$InstallRoot,
 
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$QueueResultPath,
     [string]$VBoxManage = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$schema = 'printbridge.m8.installation.v1'
+$schema = 'quirewire.m8.installation.v1'
 $scriptPath = $MyInvocation.MyCommand.Path
-$taskPath = '\PrintBridge\'
+$taskPath = '\QuireWire\'
 $taskName = 'Agent'
 $configPath = Join-Path $DataRoot 'm6.conf'
 $manifestPath = Join-Path $DataRoot 'installation.json'
 $printerStatePath = Join-Path $DataRoot 'm5-windows-printer.json'
-$agentPath = Join-Path $InstallRoot 'bin\printbridge-agent.exe'
-$cliPath = Join-Path $InstallRoot 'bin\printbridgectl.exe'
+$agentPath = Join-Path $InstallRoot 'bin\quirewire-agent.exe'
+$cliPath = Join-Path $InstallRoot 'bin\quirewirectl.exe'
 $startupScript = Join-Path $InstallRoot 'scripts\m6\windows\Invoke-M6Startup.ps1'
 $printerScript = Join-Path $InstallRoot 'scripts\m5\windows\Invoke-M5WindowsPrinting.ps1'
 $lanScript = Join-Path $InstallRoot 'scripts\m10\windows\Invoke-M10LanSharing.ps1'
@@ -53,8 +53,8 @@ $DataRoot = Get-FullPath $DataRoot
 $configPath = Join-Path $DataRoot 'm6.conf'
 $manifestPath = Join-Path $DataRoot 'installation.json'
 $printerStatePath = Join-Path $DataRoot 'm5-windows-printer.json'
-$agentPath = Join-Path $InstallRoot 'bin\printbridge-agent.exe'
-$cliPath = Join-Path $InstallRoot 'bin\printbridgectl.exe'
+$agentPath = Join-Path $InstallRoot 'bin\quirewire-agent.exe'
+$cliPath = Join-Path $InstallRoot 'bin\quirewirectl.exe'
 $startupScript = Join-Path $InstallRoot 'scripts\m6\windows\Invoke-M6Startup.ps1'
 $printerScript = Join-Path $InstallRoot 'scripts\m5\windows\Invoke-M5WindowsPrinting.ps1'
 $lanScript = Join-Path $InstallRoot 'scripts\m10\windows\Invoke-M10LanSharing.ps1'
@@ -79,7 +79,7 @@ function Read-Config {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         $parts = $line.Split('=', 2)
         if ($parts.Count -ne 2 -or $values.Contains($parts[0])) {
-            throw 'The PrintBridge configuration is malformed or contains duplicate keys.'
+            throw 'The QuireWire configuration is malformed or contains duplicate keys.'
         }
         $values[$parts[0]] = $parts[1]
     }
@@ -90,28 +90,28 @@ function Read-Config {
     if (@($required | Where-Object { -not $values.Contains($_) }).Count -ne 0 -or
         $unknown.Count -ne 0 -or
         $values.Contains('lan_interface_alias') -ne $values.Contains('lan_subnet')) {
-        throw 'The PrintBridge configuration does not match the exact supported schema.'
+        throw 'The QuireWire configuration does not match the exact supported schema.'
     }
-    if ($values.schema -ne 'printbridge.m6.config.v1' -or $values.owner_sid -ne $ownerSid) {
-        throw 'The PrintBridge configuration is not owned by the current Windows user.'
+    if ($values.schema -ne 'quirewire.m6.config.v1' -or $values.owner_sid -ne $ownerSid) {
+        throw 'The QuireWire configuration is not owned by the current Windows user.'
     }
     if ($values.vm_uuid -notmatch '^[0-9a-fA-F-]{36}$' -or
-        $values.printer_name -ne 'Brother via PrintBridge' -or
+        $values.printer_name -ne 'Brother via QuireWire' -or
         $values.endpoint_port -notmatch '^[0-9]{1,5}$' -or
         $values.guest_queue -notmatch '^[A-Za-z0-9._-]+$') {
-        throw 'The PrintBridge configuration contains an unsupported managed identity.'
+        throw 'The QuireWire configuration contains an unsupported managed identity.'
     }
     if (-not $values.Contains('scanner_port')) { $values['scanner_port'] = '8645' }
     if ($values.scanner_port -notmatch '^[0-9]{1,5}$' -or
         [int]$values.scanner_port -lt 1 -or [int]$values.scanner_port -gt 65535 -or
         [int]$values.scanner_port -eq [int]$values.endpoint_port) {
-        throw 'The PrintBridge scanner port is invalid or conflicts with the IPP port.'
+        throw 'The QuireWire scanner port is invalid or conflicts with the IPP port.'
     }
     if ($values.Contains('lan_interface_alias')) {
         if ([string]::IsNullOrWhiteSpace($values.lan_interface_alias) -or
             $values.lan_interface_alias.IndexOfAny([char[]]"`r`n") -ge 0 -or
             $values.lan_subnet -notmatch '^[0-9]{1,3}(?:\.[0-9]{1,3}){3}/(?:[89]|[12][0-9]|30)$') {
-            throw 'The PrintBridge LAN approval is malformed.'
+            throw 'The QuireWire LAN approval is malformed.'
         }
     }
     if ($values.Contains('lan_scan_port') -and
@@ -150,7 +150,7 @@ function Write-Manifest([object]$Manifest) {
         $Manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporary -Encoding utf8
         Move-Item -LiteralPath $temporary -Destination $manifestPath -Force
         & icacls.exe $DataRoot '/inheritance:r' '/grant:r' "*$ownerSid`:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the PrintBridge data directory ACL.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the QuireWire data directory ACL.' }
         & icacls.exe $manifestPath '/inheritance:r' '/grant:r' "*$ownerSid`:F" '*S-1-5-18:F' | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the M8 ownership manifest ACL.' }
     }
@@ -161,20 +161,20 @@ function Write-Manifest([object]$Manifest) {
 
 function Invoke-Startup([string]$StartupAction, [string]$Executable = $agentPath) {
     if (-not (Test-Path -LiteralPath $startupScript -PathType Leaf)) {
-        throw 'The packaged startup provider is missing. Repair the PrintBridge installation.'
+        throw 'The packaged startup provider is missing. Repair the QuireWire installation.'
     }
     $output = @(& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass `
         -File $startupScript -Action $StartupAction -AgentExecutable $Executable `
         -AgentConfig $configPath -OwnerSid $ownerSid 2>&1 | ForEach-Object { $_.ToString() })
     if ($LASTEXITCODE -ne 0 -or $output -notcontains 'ok=true') {
-        throw "The exact PrintBridge startup task operation '$StartupAction' failed."
+        throw "The exact QuireWire startup task operation '$StartupAction' failed."
     }
 }
 
 function Stop-ExactAgent([string]$Executable) {
     if ([string]::IsNullOrWhiteSpace($Executable)) { return }
     $expected = Get-FullPath $Executable
-    $processes = @(Get-CimInstance Win32_Process -Filter "Name='printbridge-agent.exe'" -ErrorAction SilentlyContinue)
+    $processes = @(Get-CimInstance Win32_Process -Filter "Name='quirewire-agent.exe'" -ErrorAction SilentlyContinue)
     foreach ($process in $processes) {
         if (-not [string]::IsNullOrWhiteSpace($process.ExecutablePath) -and
             (Get-FullPath $process.ExecutablePath) -eq $expected) {
@@ -187,7 +187,7 @@ function Disable-ExistingOwnedTask {
     $task = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue
     if (-not $task) { return $null }
     if (@($task.Actions).Count -ne 1 -or [string]::IsNullOrWhiteSpace($task.Actions[0].Execute)) {
-        throw 'The colliding PrintBridge task does not contain one exact executable action.'
+        throw 'The colliding QuireWire task does not contain one exact executable action.'
     }
     $oldExecutable = [string]$task.Actions[0].Execute
     Invoke-Startup -StartupAction Status -Executable $oldExecutable
@@ -215,12 +215,12 @@ function Remove-LegacyOwnedQueues {
 
     $legacyOwnedQueues = @(
         [pscustomobject]@{
-            Name = 'Brother via PrintBridge POC'
-            Comment = 'PrintBridge M0 feasibility POC - owned by Manage-M0IppPrinter.ps1'
+            Name = 'Brother via QuireWire POC'
+            Comment = 'QuireWire M0 feasibility POC - owned by Manage-M0IppPrinter.ps1'
         },
         [pscustomobject]@{
-            Name = 'Brother via PrintBridge M1'
-            Comment = 'PrintBridge M1 manual spike - owned by Manage-M1IppPrinter.ps1'
+            Name = 'Brother via QuireWire M1'
+            Comment = 'QuireWire M1 manual spike - owned by Manage-M1IppPrinter.ps1'
         }
     )
     $removed = @()
@@ -243,7 +243,7 @@ function Remove-LegacyOwnedQueues {
 
         Remove-Printer -Name $legacy.Name -ErrorAction Stop
         if ($null -ne (Get-Printer -Name $legacy.Name -ErrorAction SilentlyContinue)) {
-            throw "The exact legacy PrintBridge queue '$($legacy.Name)' remained after removal."
+            throw "The exact legacy QuireWire queue '$($legacy.Name)' remained after removal."
         }
         $removed += $legacy.Name
     }
@@ -364,7 +364,7 @@ function Invoke-OwnedQueue([ValidateSet('Install', 'Remove')][string]$QueueActio
     $queueFound = $status.output -contains 'queue_found=true'
     $ownershipVerified = $status.output -contains 'ownership_verified=true'
     if ($queueFound -and -not $ownershipVerified) {
-        throw 'The configured queue name exists without the exact PrintBridge ownership record; it was not changed.'
+        throw 'The configured queue name exists without the exact QuireWire ownership record; it was not changed.'
     }
     if (($QueueAction -eq 'Install' -and $ownershipVerified) -or
         ($QueueAction -eq 'Remove' -and -not $queueFound)) {
@@ -398,8 +398,8 @@ function Remove-InstallationOwnedVm([object]$Vm) {
     if (-not (Test-Path -LiteralPath $VBoxManage -PathType Leaf)) {
         throw 'VirtualBox is unavailable; refusing to leave an installation-owned VM untracked.'
     }
-    $schemaValue = Get-VBoxExtraData $Vm.uuid 'PrintBridge/Schema'
-    $markerValue = Get-VBoxExtraData $Vm.uuid 'PrintBridge/Owner'
+    $schemaValue = Get-VBoxExtraData $Vm.uuid 'QuireWire/Schema'
+    $markerValue = Get-VBoxExtraData $Vm.uuid 'QuireWire/Owner'
     if ($schemaValue -ne $Vm.schema -or $markerValue -ne $Vm.marker) {
         throw 'The live VM no longer matches the M8 manifest; refusing deletion.'
     }
@@ -490,7 +490,7 @@ switch ($Action) {
         if (-not (Test-IsAdministrator)) { throw 'The scoped printer helper requires an elevated Windows token.' }
         $verifiedResultPath = Assert-ChildPath $QueueResultPath $DataRoot
         $config = Read-Config
-        if (-not $config) { throw 'The scoped printer helper needs the protected PrintBridge configuration.' }
+        if (-not $config) { throw 'The scoped printer helper needs the protected QuireWire configuration.' }
         $result = Invoke-PrinterProvider -ProviderAction Install -Config $config
         $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $verifiedResultPath -Encoding utf8
         if ($result.exit_code -ne 0 -or $result.output -notcontains 'ok=true') { exit 1 }
@@ -500,7 +500,7 @@ switch ($Action) {
         if (-not (Test-IsAdministrator)) { throw 'The scoped printer helper requires an elevated Windows token.' }
         $verifiedResultPath = Assert-ChildPath $QueueResultPath $DataRoot
         $config = Read-Config
-        if (-not $config) { throw 'The scoped printer helper needs the protected PrintBridge configuration.' }
+        if (-not $config) { throw 'The scoped printer helper needs the protected QuireWire configuration.' }
         $result = Invoke-PrinterProvider -ProviderAction Remove -Config $config
         $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $verifiedResultPath -Encoding utf8
         if ($result.exit_code -ne 0 -or $result.output -notcontains 'ok=true') { exit 1 }
@@ -537,7 +537,7 @@ switch ($Action) {
             action = $Action
             configured = [bool]$config
             persistent_agent_elevated = $false
-            network_required_for_printbridge = $false
+            network_required_for_quirewire = $false
             owner_appliance_required = -not [bool]$config
             legacy_queues_removed = @($legacyQueuesRemoved)
         } | ConvertTo-Json

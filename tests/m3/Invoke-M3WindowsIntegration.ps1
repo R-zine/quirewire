@@ -29,12 +29,12 @@ if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
     )
 }
 
-$schemaKey = 'PrintBridge/Schema'
-$schemaValue = 'printbridge.m3.owned-vm.v1'
-$ownerKey = 'PrintBridge/Owner'
+$schemaKey = 'QuireWire/Schema'
+$schemaValue = 'quirewire.m3.owned-vm.v1'
+$ownerKey = 'QuireWire/Owner'
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-$marker = "printbridge.m3.integration.$stamp.$([guid]::NewGuid().ToString('N'))"
-$fixtureName = "PrintBridge-M3-Integration-$stamp"
+$marker = "quirewire.m3.integration.$stamp.$([guid]::NewGuid().ToString('N'))"
+$fixtureName = "QuireWire-M3-Integration-$stamp"
 $evidenceDirectory = Join-Path $EvidenceRoot $stamp
 $configPath = Join-Path $evidenceDirectory 'm3-integration.conf'
 $summaryPath = Join-Path $evidenceDirectory 'summary.txt'
@@ -135,14 +135,14 @@ function Assert-FixtureOwnership {
     }
 }
 
-function Invoke-PrintBridge {
+function Invoke-QuireWire {
     param(
         [Parameter(Mandatory)][string[]]$Arguments,
         [int]$ExpectedExit = 0
     )
-    & cargo run --quiet -p printbridgectl -- --config $configPath @Arguments
+    & cargo run --quiet -p quirewirectl -- --config $configPath @Arguments
     if ($LASTEXITCODE -ne $ExpectedExit) {
-        throw "printbridgectl exit was $LASTEXITCODE; expected $ExpectedExit for '$($Arguments -join ' ')'."
+        throw "quirewirectl exit was $LASTEXITCODE; expected $ExpectedExit for '$($Arguments -join ' ')'."
     }
 }
 
@@ -235,7 +235,7 @@ try {
     ) | Out-Null
 
     @(
-        'schema=printbridge.m3.config.v1'
+        'schema=quirewire.m3.config.v1'
         "vm_uuid=$fixtureUuid"
         "vm_marker=$marker-intentional-mismatch"
         'usb_vendor_id=ffff'
@@ -243,13 +243,13 @@ try {
     ) | Set-Content -LiteralPath $configPath -Encoding ascii
 
     Write-Host 'Proving that unmarked clones are rejected before lifecycle mutation...'
-    Invoke-PrintBridge -Arguments @('vm', 'status') -ExpectedExit 1
+    Invoke-QuireWire -Arguments @('vm', 'status') -ExpectedExit 1
     if ((Get-VmValues -Uuid $fixtureUuid)['VMState'] -notin @('poweroff', 'aborted')) {
         throw 'Ownership-negative test changed VM state unexpectedly.'
     }
 
     @(
-        'schema=printbridge.m3.config.v1'
+        'schema=quirewire.m3.config.v1'
         "vm_uuid=$fixtureUuid"
         "vm_marker=$marker"
         'usb_vendor_id=ffff'
@@ -258,10 +258,10 @@ try {
     Assert-FixtureOwnership
 
     Write-Host 'Exercising exact-UUID lifecycle and idempotence through the M3 CLI...'
-    Invoke-PrintBridge -Arguments @('vm', 'status')
-    Invoke-PrintBridge -Arguments @('vm', 'start')
-    Invoke-PrintBridge -Arguments @('vm', 'start')
-    Invoke-PrintBridge -Arguments @('vm', 'status')
+    Invoke-QuireWire -Arguments @('vm', 'status')
+    Invoke-QuireWire -Arguments @('vm', 'start')
+    Invoke-QuireWire -Arguments @('vm', 'start')
+    Invoke-QuireWire -Arguments @('vm', 'status')
     Write-Host "Waiting for loopback-only guest CUPS readiness..."
     $readyDeadline = (Get-Date).AddSeconds($GuestReadyWaitSeconds)
     do {
@@ -275,10 +275,10 @@ try {
     }
     Write-Host "Guest CUPS is reachable; settling for $GuestBootSettleSeconds seconds before ACPI..."
     Start-Sleep -Seconds $GuestBootSettleSeconds
-    Invoke-PrintBridge -Arguments @('vm', 'stop')
-    Invoke-PrintBridge -Arguments @('vm', 'stop')
-    Invoke-PrintBridge -Arguments @('vm', 'status')
-    Invoke-PrintBridge -Arguments @('doctor')
+    Invoke-QuireWire -Arguments @('vm', 'stop')
+    Invoke-QuireWire -Arguments @('vm', 'stop')
+    Invoke-QuireWire -Arguments @('vm', 'status')
+    Invoke-QuireWire -Arguments @('doctor')
 
     if ((Get-VmValues -Uuid $fixtureUuid)['VMState'] -ne 'poweroff') {
         throw 'Disposable fixture did not finish powered off.'

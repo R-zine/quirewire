@@ -2,13 +2,13 @@ use std::env;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use printbridge_agent::{M3AgentService, M3Config, M5AgentService, M5Config};
-use printbridge_core::{TraceEvent, TraceField, TraceLevel};
-use printbridge_domain::{
+use quirewire_agent::{M3AgentService, M3Config, M5AgentService, M5Config};
+use quirewire_core::{TraceEvent, TraceField, TraceLevel};
+use quirewire_domain::{
     CheckState, ComponentStatus, DoctorReport, JobState, UsbDevice, WindowsPrintSubmission,
     WindowsQueueStatus,
 };
-use printbridge_ipc::{
+use quirewire_ipc::{
     Client, Command, CommandResult, InProcessClient, Payload, Request, RequestEnvelope, Response,
 };
 
@@ -16,7 +16,7 @@ pub fn run(args: &[String], output: &mut impl Write, error: &mut impl Write) -> 
     match parse_m6_command(args) {
         Some(Ok(command)) => return run_m6(command, output, error),
         Some(Err(message)) => {
-            let _ = writeln!(error, "{message}\nRun 'printbridgectl help'.");
+            let _ = writeln!(error, "{message}\nRun 'quirewirectl help'.");
             return 2;
         }
         None => {}
@@ -24,7 +24,7 @@ pub fn run(args: &[String], output: &mut impl Write, error: &mut impl Write) -> 
     let invocation = match parse_args(args) {
         Ok(invocation) => invocation,
         Err(message) => {
-            let _ = writeln!(error, "{message}\nRun 'printbridgectl help'.");
+            let _ = writeln!(error, "{message}\nRun 'quirewirectl help'.");
             return 2;
         }
     };
@@ -131,14 +131,14 @@ fn run_m6(command: Command, output: &mut impl Write, error: &mut impl Write) -> 
     }
     #[cfg(windows)]
     {
-        let sid = match printbridge_ipc::windows_pipe::current_user_sid() {
+        let sid = match quirewire_ipc::windows_pipe::current_user_sid() {
             Ok(value) => value,
             Err(failure) => {
                 let _ = writeln!(error, "ipc_identity: {failure}");
                 return 1;
             }
         };
-        let pipe_name = printbridge_ipc::windows_pipe::pipe_name_for_sid(&sid);
+        let pipe_name = quirewire_ipc::windows_pipe::pipe_name_for_sid(&sid);
         let request_id = format!(
             "cli-{}-{}",
             std::process::id(),
@@ -158,7 +158,7 @@ fn run_m6(command: Command, output: &mut impl Write, error: &mut impl Write) -> 
                 return 1;
             }
         };
-        let response = match runtime.block_on(printbridge_ipc::windows_pipe::send(
+        let response = match runtime.block_on(quirewire_ipc::windows_pipe::send(
             &pipe_name,
             &request,
             std::time::Duration::from_secs(90),
@@ -167,7 +167,7 @@ fn run_m6(command: Command, output: &mut impl Write, error: &mut impl Write) -> 
             Err(failure) => {
                 let _ = writeln!(
                     error,
-                    "agent_unavailable: {failure}. Open the PrintBridge desktop app."
+                    "agent_unavailable: {failure}. Open the QuireWire desktop app."
                 );
                 return 1;
             }
@@ -306,17 +306,17 @@ fn parse_index(value: &str) -> Result<usize, String> {
 
 fn load_m3_config(
     explicit: Option<&Path>,
-) -> Result<Option<M3Config>, printbridge_domain::BridgeError> {
+) -> Result<Option<M3Config>, quirewire_domain::BridgeError> {
     let configured = explicit
         .map(Path::to_path_buf)
-        .or_else(|| env::var_os("PRINTBRIDGE_M3_CONFIG").map(PathBuf::from));
+        .or_else(|| env::var_os("QUIREWIRE_M3_CONFIG").map(PathBuf::from));
     if let Some(path) = configured {
         return M3Config::load(&path).map(Some);
     }
     let Some(local_app_data) = env::var_os("LOCALAPPDATA") else {
         return Ok(None);
     };
-    let default = PathBuf::from(local_app_data).join("PrintBridge/m3.conf");
+    let default = PathBuf::from(local_app_data).join("QuireWire/m3.conf");
     if default.is_file() {
         M3Config::load(&default).map(Some)
     } else {
@@ -324,31 +324,31 @@ fn load_m3_config(
     }
 }
 
-fn load_m5_config(explicit: Option<&Path>) -> Result<M5Config, printbridge_domain::BridgeError> {
+fn load_m5_config(explicit: Option<&Path>) -> Result<M5Config, quirewire_domain::BridgeError> {
     let configured = explicit
         .map(Path::to_path_buf)
-        .or_else(|| env::var_os("PRINTBRIDGE_M5_CONFIG").map(PathBuf::from));
+        .or_else(|| env::var_os("QUIREWIRE_M5_CONFIG").map(PathBuf::from));
     if let Some(path) = configured {
         return M5Config::load(&path);
     }
     let local_app_data = env::var_os("LOCALAPPDATA").ok_or_else(|| {
-        printbridge_domain::BridgeError::MissingDependency {
+        quirewire_domain::BridgeError::MissingDependency {
             dependency: "M5 configuration".into(),
-            action: "Pass --config <path> using printbridge.m5.config.v1.".into(),
+            action: "Pass --config <path> using quirewire.m5.config.v1.".into(),
         }
     })?;
-    let default = PathBuf::from(local_app_data).join("PrintBridge/m5.conf");
+    let default = PathBuf::from(local_app_data).join("QuireWire/m5.conf");
     if default.is_file() {
         M5Config::load(&default)
     } else {
-        Err(printbridge_domain::BridgeError::MissingDependency {
+        Err(quirewire_domain::BridgeError::MissingDependency {
             dependency: format!("M5 configuration at {}", default.display()),
             action: "Pass --config <path> or create the documented per-user m5.conf.".into(),
         })
     }
 }
 
-fn error_response(error: printbridge_domain::BridgeError) -> Response {
+fn error_response(error: quirewire_domain::BridgeError) -> Response {
     Response::Error {
         code: error.kind().as_str().into(),
         message: error.to_string(),
@@ -473,8 +473,8 @@ fn provider_label(request: &Request) -> &'static str {
 }
 
 const fn cli_help_text() -> &'static str {
-    "PrintBridge M6 CLI\n\
-Usage: printbridgectl [--trace] [--config <path>] <command>\n\n\
+    "QuireWire M6 CLI\n\
+Usage: quirewirectl [--trace] [--config <path>] <command>\n\n\
 Headless agent commands (named-pipe IPC):\n\
   status | devices | setup --index N | start | stop | restart\n\
   test-print | diagnostics | repair | shutdown\n\n\
@@ -556,11 +556,11 @@ fn write_doctor(report: &DoctorReport, output: &mut impl Write) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use printbridge_domain::{
+    use quirewire_domain::{
         ComponentState, ComponentStatus, JobState, UsbDevice, UsbIdentity, WindowsPrintSubmission,
         WindowsQueueStatus,
     };
-    use printbridge_ipc::{Client, Command, Request, Response};
+    use quirewire_ipc::{Client, Command, Request, Response};
 
     use super::{parse_args, parse_m6_command, run_invocation};
 
@@ -724,11 +724,11 @@ mod tests {
     fn printer_status_and_submission_are_truthful() {
         let invocation = parse_args(&["printer".into(), "status".into()]).expect("args");
         let mut client = StubClient::returning(Response::PrinterStatus(WindowsQueueStatus {
-            queue: Some(printbridge_domain::PrintQueue {
-                name: "Brother via PrintBridge".into(),
+            queue: Some(quirewire_domain::PrintQueue {
+                name: "Brother via QuireWire".into(),
                 driver: "Microsoft IPP Class Driver".into(),
             }),
-            endpoint: "http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D".into(),
+            endpoint: "http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D".into(),
             port_name: Some("WSD-test".into()),
             printer_status: Some("Normal".into()),
             spooler_running: true,

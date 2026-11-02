@@ -2,7 +2,7 @@
 
 ## Trust and privilege boundaries
 
-- `printbridge-desktop.exe` launches `printbridge-agent.exe` on demand as the
+- `quirewire-desktop.exe` launches `quirewire-agent.exe` on demand as the
   installing interactive user with a Limited token. No service, login task, or
   persistently elevated UI process is installed.
 - The desktop and CLI send only fixed typed commands over a versioned named pipe
@@ -33,7 +33,7 @@
   marked disposable raw clone; that clone and its log are deleted after bounded
   failure analysis.
 - The guest retains CUPS `--no-remote-admin --no-remote-any` as its baseline and
-  adds one validated marker block for `/printers/PrintBridge_DCP_L2600D` only.
+  adds one validated marker block for `/printers/QuireWire_DCP_L2600D` only.
   The CUPS root and `/admin` locations remain local-only.
 
 ## Ownership and destructive operations

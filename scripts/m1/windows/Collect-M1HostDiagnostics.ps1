@@ -5,7 +5,7 @@ param(
     [string]$VmUuid,
 
     [string]$OutputDirectory,
-    [string]$PrinterName = 'Brother via PrintBridge M1',
+    [string]$PrinterName = 'Brother via QuireWire M1',
     [string]$IppUrl = 'ipp://127.0.0.1:8632/printers/DCPL2600D',
     [ValidatePattern('^[0-9A-Fa-f]{4}$')][string]$UsbVendorId = '04f9',
     [ValidatePattern('^[0-9A-Fa-f]{4}$')][string]$UsbProductId = '0567',
@@ -133,7 +133,7 @@ $targetPnp = Invoke-Diagnostic -Name 'Target Brother USB PnP state' -ScriptBlock
 }
 
 $report = [ordered]@{
-    schema = 'printbridge.m1.host-diagnostics.v1'
+    schema = 'quirewire.m1.host-diagnostics.v1'
     collectedUtc = [DateTime]::UtcNow.ToString('o')
     scopeNotice = 'Read-only inventory. Job completion does not prove that paper physically printed.'
     requestedVmUuid = $VmUuid.ToLowerInvariant()
@@ -165,7 +165,7 @@ $endpointSucceeded = $report.ippEndpoint.status -eq 'ok' -and $report.ippEndpoin
 $usbCount = if ($report.targetUsb.status -eq 'ok') { $report.targetUsb.value.Count } else { 0 }
 $driver = if ($null -eq $targetQueue) { '<queue unavailable>' } else { $targetQueue.DriverName }
 @"
-PrintBridge M1 host diagnostics
+QuireWire M1 host diagnostics
 Collected UTC: $($report.collectedUtc)
 Owned VM UUID: $($VmUuid.ToLowerInvariant())
 Owned VM state: $vmState

@@ -7,7 +7,7 @@ param(
     [string]$IppUrl,
 
     [ValidateNotNullOrEmpty()]
-    [string]$PrinterName = 'Brother via PrintBridge POC',
+    [string]$PrinterName = 'Brother via QuireWire POC',
 
     [string]$EvidenceDirectory,
 
@@ -19,7 +19,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$OwnedComment = 'PrintBridge M0 feasibility POC - owned by Manage-M0IppPrinter.ps1'
+$OwnedComment = 'QuireWire M0 feasibility POC - owned by Manage-M0IppPrinter.ps1'
 $ExpectedDriver = 'Microsoft IPP Class Driver'
 
 if ([string]::IsNullOrWhiteSpace($EvidenceDirectory)) {
@@ -99,7 +99,7 @@ function Write-ActionRecord {
     $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
     $path = Join-Path $recordsDirectory "$stamp-$($Operation.ToLowerInvariant()).json"
     $record = [ordered]@{
-        schema = 'printbridge.m0.windows-printer-action.v1'
+        schema = 'quirewire.m0.windows-printer-action.v1'
         recordedUtc = [DateTime]::UtcNow.ToString('o')
         action = $Operation
         data = $Payload
@@ -168,7 +168,7 @@ switch ($Action) {
             if (Test-Path -LiteralPath $markerPath) {
                 try {
                     $marker = Get-Content -Raw -LiteralPath $markerPath | ConvertFrom-Json
-                    $owned = $marker.schema -eq 'printbridge.m0.owned-printer.v1' -and
+                    $owned = $marker.schema -eq 'quirewire.m0.owned-printer.v1' -and
                         $marker.printerName -eq $PrinterName -and
                         $marker.ippUrl -eq $uri.AbsoluteUri -and
                         $existing.Comment -eq $OwnedComment -and
@@ -219,7 +219,7 @@ switch ($Action) {
             Set-Printer -Name $PrinterName -Comment $OwnedComment -ErrorAction Stop
             $created = Get-Queue
             if ($null -eq $created -or $created.Comment -ne $OwnedComment) {
-                throw 'Windows did not retain the PrintBridge ownership comment.'
+                throw 'Windows did not retain the QuireWire ownership comment.'
             }
         }
         catch {
@@ -232,7 +232,7 @@ switch ($Action) {
 
         New-Item -ItemType Directory -Force -Path $ownershipDirectory | Out-Null
         $marker = [ordered]@{
-            schema = 'printbridge.m0.owned-printer.v1'
+            schema = 'quirewire.m0.owned-printer.v1'
             createdUtc = [DateTime]::UtcNow.ToString('o')
             printerName = $created.Name
             ippUrl = $uri.AbsoluteUri
@@ -258,7 +258,7 @@ switch ($Action) {
         }
 
         $marker = Get-Content -Raw -LiteralPath $markerPath | ConvertFrom-Json
-        if ($marker.schema -ne 'printbridge.m0.owned-printer.v1' -or $marker.printerName -ne $PrinterName) {
+        if ($marker.schema -ne 'quirewire.m0.owned-printer.v1' -or $marker.printerName -ne $PrinterName) {
             throw 'Ownership marker does not match the requested queue. Refusing removal.'
         }
 

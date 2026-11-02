@@ -11,9 +11,9 @@ pub mod m6;
 pub use m3::{M3_CONFIG_SCHEMA, M3AgentService, M3Config, m3_help_text};
 pub use m5::{M5_CONFIG_SCHEMA, M5AgentService, M5Config, m5_help_text};
 
-use printbridge_core::{Controller, fake::FakePlatform};
-use printbridge_domain::Platform;
-use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+use quirewire_core::{Controller, fake::FakePlatform};
+use quirewire_domain::Platform;
+use quirewire_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
 
 pub struct AgentService<P> {
     controller: Controller<P>,
@@ -72,8 +72,8 @@ impl<P: Platform> RequestHandler for AgentService<P> {
 
 #[must_use]
 pub const fn help_text() -> &'static str {
-    "PrintBridge M2 CLI (fake in-memory provider)\n\
-Usage: printbridgectl [--trace] <command>\n\n\
+    "QuireWire M2 CLI (fake in-memory provider)\n\
+Usage: quirewirectl [--trace] <command>\n\n\
 Commands:\n\
   status    Show typed component and overall state\n\
   doctor    Run hardware-free provider contract checks\n\
@@ -83,7 +83,7 @@ M2 never invokes VirtualBox, CUPS, Windows printing APIs, or physical hardware."
 
 #[cfg(test)]
 mod tests {
-    use printbridge_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
+    use quirewire_ipc::{PROTOCOL_VERSION, Request, RequestHandler, Response};
 
     use super::AgentService;
 

@@ -1,4 +1,4 @@
-use printbridge_domain::{
+use quirewire_domain::{
     BridgeError, BridgePhase, BridgeStatus, ComponentState, ComponentStatus, Components,
 };
 
@@ -125,7 +125,7 @@ const fn status(state: ComponentState) -> ComponentStatus {
 
 #[cfg(test)]
 mod tests {
-    use printbridge_domain::BridgePhase;
+    use quirewire_domain::BridgePhase;
 
     use super::{BridgeEvent, BridgeStateMachine, Component};
 

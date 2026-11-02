@@ -19,14 +19,16 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 publish = false
+authors = ["Ivan Radev"]
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-printbridge-agent = { path = "crates/agent" }
-printbridge-core = { path = "crates/core" }
-printbridge-domain = { path = "crates/domain" }
-printbridge-ipc = { path = "crates/ipc" }
-printbridge-provider-lan = { path = "crates/provider-lan" }
-printbridge-provider-scan = { path = "crates/provider-scan" }
+quirewire-agent = { path = "crates/agent" }
+quirewire-core = { path = "crates/core" }
+quirewire-domain = { path = "crates/domain" }
+quirewire-ipc = { path = "crates/ipc" }
+quirewire-provider-lan = { path = "crates/provider-lan" }
+quirewire-provider-scan = { path = "crates/provider-scan" }
 mdns-sd = "0.21.6"
 quick-xml = "0.38.4"
 serde = { version = "1.0.229", features = ["derive"] }

@@ -13,7 +13,7 @@ completed CUPS job alone.
 - [x] The exact USB device `04f9:0567` was attached; no unrelated USB device or
       VM was changed.
 - [x] Reapplying the same driver medium completed and powered off normally.
-- [x] With build media removed, CUPS was active, `PrintBridge_DCP_L2600D` was
+- [x] With build media removed, CUPS was active, `QuireWire_DCP_L2600D` was
       idle and accepting, IPP passed, and the USB device was present.
 - [x] The host endpoint was loopback-only and CUPS remote administration was
       disabled.

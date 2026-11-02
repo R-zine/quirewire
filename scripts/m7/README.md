@@ -15,10 +15,10 @@ npm ci
 npm test
 npm run build
 cargo tauri build --no-bundle
-..\..\target\release\printbridge-desktop.exe
+..\..\target\release\quirewire-desktop.exe
 ```
 
-Do not stop `printbridge-agent.exe`. The desktop must connect to the scheduled
+Do not stop `quirewire-agent.exe`. The desktop must connect to the scheduled
 per-user agent through the protocol-v4 owner-only named pipe.
 
 ## Owner checklist
@@ -32,17 +32,17 @@ per-user agent through the protocol-v4 owner-only named pipe.
    acceptance in the UI and actual paper output. The UI must continue to say
    that physical output requires owner confirmation.
 4. Open Diagnostics, export a report, confirm the JSON exists in
-   `Documents\PrintBridge`, then run `Run safe repair`; confirm all components
+   `Documents\QuireWire`, then run `Run safe repair`; confirm all components
    return to `Ready`. Do not share the export publicly because it contains
    local paths and the owner SID, though the USB serial is redacted.
 5. Click the window close button. Confirm the window disappears, the tray icon
-   remains, and `printbridge-agent.exe` is still running. Reopen with tray
-   `Open PrintBridge`.
+   remains, and `quirewire-agent.exe` is still running. Reopen with tray
+   `Open QuireWire`.
 6. From the tray choose `Test page`; confirm a second physical page prints.
    Also confirm `Restart bridge` and `View diagnostics` work.
 7. Submit one more test page and immediately choose tray
    `Exit UI (engine keeps running)`. Confirm the desktop/tray process exits,
-   `printbridge-agent.exe` remains, and that submitted page physically prints.
+   `quirewire-agent.exe` remains, and that submitted page physically prints.
 8. Relaunch the desktop and confirm Overview returns to `Ready`. Record only
    observed results:
 

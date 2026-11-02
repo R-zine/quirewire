@@ -56,8 +56,8 @@ $capability = Get-Content -Raw (Join-Path $desktopRoot 'src-tauri\capabilities\m
     ConvertFrom-Json
 
 Check 'desktop links only the shared IPC crate' {
-    $desktopManifest -match 'printbridge-ipc' -and
-        $desktopManifest -notmatch 'printbridge-(agent|core|provider)'
+    $desktopManifest -match 'quirewire-ipc' -and
+        $desktopManifest -notmatch 'quirewire-(agent|core|provider)'
 }
 Check 'frontend imports no provider or operating-system control code' {
     $frontend -notmatch 'VBoxManage|provider-virtualbox|provider-cups|provider-windows|Add-Printer|PowerShell|ssh '
@@ -65,7 +65,7 @@ Check 'frontend imports no provider or operating-system control code' {
 foreach ($command in @(
     'agent_get_status', 'agent_discover_devices', 'agent_begin_setup', 'agent_start',
     'agent_stop', 'agent_restart', 'agent_test_print', 'agent_get_diagnostics',
-    'agent_repair', 'export_diagnostics', 'exit_printbridge'
+    'agent_repair', 'export_diagnostics', 'exit_quirewire'
 )) {
     Check "fixed desktop command $command" {
         $frontendClient -match [regex]::Escape($command) -and
@@ -81,12 +81,12 @@ Check 'close hides UI without stopping engine' {
         $tauriBackend -match 'window\.hide'
 }
 Check 'explicit Exit requests graceful agent shutdown before app exit' {
-    $tauriBackend -match '(?s)fn exit_printbridge\(.+?Command::Shutdown.+?app\.exit\(0\)'
+    $tauriBackend -match '(?s)fn exit_quirewire\(.+?Command::Shutdown.+?app\.exit\(0\)'
 }
-foreach ($label in @('Open PrintBridge', 'Test page', 'Restart bridge', 'View diagnostics', 'Exit PrintBridge (stop sharing)')) {
+foreach ($label in @('Open QuireWire', 'Test page', 'Restart bridge', 'View diagnostics', 'Exit QuireWire (stop sharing)')) {
     Check "tray item $label" { $tauriBackend -match [regex]::Escape($label) }
 }
-Check 'tray Exit explains sharing shutdown' { $tauriBackend -match 'Exit PrintBridge \(stop sharing\)' }
+Check 'tray Exit explains sharing shutdown' { $tauriBackend -match 'Exit QuireWire \(stop sharing\)' }
 Check 'explicit non-null content security policy' {
     -not [string]::IsNullOrWhiteSpace($config.app.security.csp) -and
         $config.app.security.csp -match "default-src 'self'"
@@ -99,7 +99,7 @@ Check 'frontend includes reduced-motion support' {
     (Get-Content -Raw (Join-Path $desktopRoot 'src\styles.css')) -match 'prefers-reduced-motion'
 }
 Check 'frontend has fake and real client implementations' {
-    $frontend -match 'FakePrintBridgeClient' -and $frontend -match 'TauriPrintBridgeClient'
+    $frontend -match 'FakeQuireWireClient' -and $frontend -match 'TauriQuireWireClient'
 }
 
 $negativeAcceptance = Join-Path $repositoryRoot "artifacts\m7\software-tests\acceptance-negative-$([guid]::NewGuid().ToString('N'))"
@@ -137,7 +137,7 @@ if ($null -ne $npm) {
 
 Push-Location $repositoryRoot
 try {
-    & cargo.exe test -p printbridge-desktop --all-features --offline
+    & cargo.exe test -p quirewire-desktop --all-features --offline
     Check 'desktop Rust tests' { $LASTEXITCODE -eq 0 }
 }
 finally { Pop-Location }

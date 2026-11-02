@@ -5,8 +5,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
   echo "ERROR: scanner provisioning requires root" >&2
   exit 1
 fi
-[[ -f /etc/printbridge/guest.env ]] || {
-  echo "ERROR: not a PrintBridge-owned guest" >&2
+[[ -f /etc/quirewire/guest.env ]] || {
+  echo "ERROR: not a QuireWire-owned guest" >&2
   exit 1
 }
 
@@ -49,7 +49,7 @@ validate_token() {
   }
 }
 
-schema=$(manifest_value PRINTBRIDGE_SCANNER_SCHEMA)
+schema=$(manifest_value QUIREWIRE_SCANNER_SCHEMA)
 vendor_id=$(manifest_value USB_VENDOR_ID)
 product_id=$(manifest_value USB_PRODUCT_ID)
 brscan_filename=$(manifest_value BRSCAN_FILENAME)
@@ -79,7 +79,7 @@ for pair in \
   "guest_port:$guest_port"; do
   validate_token "${pair%%:*}" "${pair#*:}"
 done
-[[ "$schema" == printbridge.m11.scanner.v1 ]]
+[[ "$schema" == quirewire.m11.scanner.v1 ]]
 [[ "$vendor_id" == 04f9 && "$product_id" == 0567 ]]
 [[ "$brscan_redistribution" == owner-local-only ]]
 [[ "$airsane_license" == GPL-3.0-only ]]
@@ -95,7 +95,7 @@ printf '%s  %s\n' "$airsane_patch_sha" "$airsane_patch" | sha256sum --check --st
 [[ "$(dpkg-deb -f "$brscan_deb" Architecture)" == "$brscan_arch" ]]
 
 # shellcheck disable=SC1091
-. /usr/local/lib/printbridge/debian.env
+. /usr/local/lib/quirewire/debian.env
 apt-get -o Acquire::Check-Valid-Until=false update
 apt-get install -y --no-install-recommends \
   "sane-utils=$(manifest_value SANE_UTILS_VERSION)" \
@@ -118,17 +118,17 @@ fi
 
 getent group scanner >/dev/null || groupadd --system scanner
 usermod -a -G scanner saned
-cat > /etc/udev/rules.d/99-printbridge-scanner.rules <<EOF
-# Exact selected PrintBridge scanner; do not grant access to unrelated Brother USB devices.
+cat > /etc/udev/rules.d/99-quirewire-scanner.rules <<EOF
+# Exact selected QuireWire scanner; do not grant access to unrelated Brother USB devices.
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="$vendor_id", ATTR{idProduct}=="$product_id", GROUP:="scanner", MODE:="0660", ENV{libsane_matched}:="yes"
 EOF
-chmod 0644 /etc/udev/rules.d/99-printbridge-scanner.rules
+chmod 0644 /etc/udev/rules.d/99-quirewire-scanner.rules
 if [[ "$offline" == no ]]; then
   udevadm control --reload-rules
   udevadm trigger --subsystem-match=usb --attr-match=idVendor="$vendor_id" --attr-match=idProduct="$product_id" || true
 fi
 
-selection=/var/lib/printbridge/scanner-selection.env
+selection=/var/lib/quirewire/scanner-selection.env
 needs_build=yes
 if [[ -x /usr/local/bin/airsaned && -f "$selection" ]] &&
   grep -Fxq "airsane_commit=$airsane_commit" "$selection" &&
@@ -137,7 +137,7 @@ if [[ -x /usr/local/bin/airsaned && -f "$selection" ]] &&
   needs_build=no
 fi
 if [[ "$needs_build" == yes ]]; then
-  build_root=$(mktemp -d /var/tmp/printbridge-airsane.XXXXXX)
+  build_root=$(mktemp -d /var/tmp/quirewire-airsane.XXXXXX)
   cleanup() { rm -rf --one-file-system "$build_root"; }
   trap cleanup EXIT
   tar -xzf "$airsane_archive" -C "$build_root"
@@ -183,7 +183,7 @@ allow 172.16.0.0/12
 allow 192.168.0.0/16
 EOF
 cat > /etc/airsane/options.conf <<'EOF'
-location Shared by PrintBridge while the app is running
+location Shared by QuireWire while the app is running
 EOF
 chmod 0644 /etc/default/airsane /etc/airsane/access.conf /etc/airsane/options.conf
 systemctl enable airsaned.service
@@ -193,9 +193,9 @@ if [[ "$offline" == no ]]; then
   systemctl is-active --quiet airsaned.service
 fi
 
-install -d -m 0755 /var/lib/printbridge
+install -d -m 0755 /var/lib/quirewire
 {
-  echo 'schema=printbridge.m11.scanner-selection.v1'
+  echo 'schema=quirewire.m11.scanner-selection.v1'
   echo "brscan_package=$brscan_package"
   echo "brscan_version=$brscan_version"
   echo "brscan_sha256=$brscan_sha"
@@ -215,4 +215,4 @@ elif lsusb -d "$vendor_id:$product_id" >/dev/null 2>&1; then
 else
   echo 'Scanner packages installed; physical USB enumeration remains blocked until the selected device is connected.'
 fi
-echo 'PrintBridge scanner provisioning completed without retaining scan content.'
+echo 'QuireWire scanner provisioning completed without retaining scan content.'

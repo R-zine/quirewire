@@ -16,7 +16,7 @@ param(
     [string]$ColorDuplexPhysical = 'NOT TESTED',
 
     [string]$DriverName,
-    [string]$PrinterName = 'Brother via PrintBridge POC',
+    [string]$PrinterName = 'Brother via QuireWire POC',
     [string]$IppUrl,
     [string]$LinuxQueue,
     [string]$WindowsTextApplication,
@@ -83,7 +83,7 @@ else {
 }
 
 $record = [ordered]@{
-    schema = 'printbridge.m0.physical-acceptance.v1'
+    schema = 'quirewire.m0.physical-acceptance.v1'
     recordedUtc = [DateTime]::UtcNow.ToString('o')
     result = $result
     reason = $reason
@@ -123,7 +123,7 @@ else {
 }
 $jobText = if ($CupsJobIds.Count -eq 0) { '<not recorded>' } else { $CupsJobIds -join ', ' }
 $markdown = @"
-# PrintBridge M0 physical acceptance record
+# QuireWire M0 physical acceptance record
 
 - Recorded UTC: $($record.recordedUtc)
 - Result: **$result**

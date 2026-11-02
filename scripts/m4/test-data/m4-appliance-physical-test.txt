@@ -1,8 +1,8 @@
-PrintBridge M4 physical appliance acceptance
+QuireWire M4 physical appliance acceptance
 
 Milestone: M4
 Path: fresh configured OVA -> CUPS -> official Brother Linux driver -> USB
-Queue: PrintBridge_DCP_L2600D
+Queue: QuireWire_DCP_L2600D
 
 The unique run token is recorded in the local M4 acceptance evidence.
 Software completion does not prove this page reached paper; the owner must confirm it.

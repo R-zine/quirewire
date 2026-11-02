@@ -27,14 +27,14 @@ function Read-Json([string]$Path, [string]$Schema) {
     if ($value.schema -ne $Schema) { return $null }
     $value
 }
-$baseline = Read-Json $MetricsBaselinePath 'printbridge.m9.metrics.v1'
-$final = Read-Json $MetricsFinalPath 'printbridge.m9.metrics.v1'
-$documents = Read-Json $DocumentManifestPath 'printbridge.m9.test-documents.v1'
+$baseline = Read-Json $MetricsBaselinePath 'quirewire.m9.metrics.v1'
+$final = Read-Json $MetricsFinalPath 'quirewire.m9.metrics.v1'
+$documents = Read-Json $DocumentManifestPath 'quirewire.m9.test-documents.v1'
 $scenarioRecords = [ordered]@{}
 $missing = [Collections.Generic.List[string]]::new()
 foreach ($name in $requiredScenarios) {
     $path = Join-Path $ScenarioDirectory "$name.json"
-    $record = Read-Json $path 'printbridge.m9.scenario-record.v1'
+    $record = Read-Json $path 'quirewire.m9.scenario-record.v1'
     if (-not $record -or $record.scenario -ne $name) { $missing.Add($name); continue }
     $scenarioRecords[$name] = $record
 }
@@ -62,7 +62,7 @@ $checks = [ordered]@{
 }
 
 if ($scenarioRecords.Contains('sequential-text-pdf')) {
-    $sequentialEvidence = Read-Json $scenarioRecords['sequential-text-pdf'].evidence.path 'printbridge.m9.application-soak.v1'
+    $sequentialEvidence = Read-Json $scenarioRecords['sequential-text-pdf'].evidence.path 'quirewire.m9.application-soak.v1'
     $checks['sequential_20_mixed_jobs'] = $null -ne $sequentialEvidence -and @($sequentialEvidence.jobs).Count -ge 20 -and
         @($sequentialEvidence.jobs | Where-Object format -eq 'text/plain').Count -ge 10 -and
         @($sequentialEvidence.jobs | Where-Object format -eq 'application/pdf').Count -ge 10
@@ -75,7 +75,7 @@ if ($scenarioRecords.Contains('sequential-text-pdf')) {
 }
 else { $checks['sequential_20_mixed_jobs'] = $false; $checks['submission_latency_p95'] = $false }
 if ($scenarioRecords.Contains('long-pdf')) {
-    $longEvidence = Read-Json $scenarioRecords['long-pdf'].evidence.path 'printbridge.m9.application-soak.v1'
+    $longEvidence = Read-Json $scenarioRecords['long-pdf'].evidence.path 'quirewire.m9.application-soak.v1'
     $checks['long_pdf_submitted'] = $null -ne $longEvidence -and @($longEvidence.jobs).Count -eq 1 -and $documents.long_pdf.pages -ge 10
 }
 else { $checks['long_pdf_submitted'] = $false }
@@ -119,7 +119,7 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory "$stamp-m9-acceptance.json"
 [ordered]@{
-    schema = 'printbridge.m9.acceptance.v1'
+    schema = 'quirewire.m9.acceptance.v1'
     recorded_utc = [DateTime]::UtcNow.ToString('o')
     result = $result
     checks = $checks
@@ -146,5 +146,5 @@ $path = Join-Path $OutputDirectory "$stamp-m9-acceptance.json"
     }
     caution = 'Physical output fields originate only from explicit owner observations. Deferred scenarios are non-gating and are not reported as passed.'
 } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m9.acceptance-result.v1'; result = $result; path = $path; missing_scenarios = $missing } | ConvertTo-Json -Depth 5
+[pscustomobject]@{ schema = 'quirewire.m9.acceptance-result.v1'; result = $result; path = $path; missing_scenarios = $missing } | ConvertTo-Json -Depth 5
 if (-not $passed) { exit 2 }

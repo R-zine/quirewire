@@ -222,7 +222,7 @@ EOF
     fi
 
     state_contents=$(cat <<EOF
-schema=printbridge.m0.cups-sharing-state.v1
+schema=quirewire.m0.cups-sharing-state.v1
 queue=$queue
 global_share=$previous_global
 queue_share=$previous_queue
@@ -283,7 +283,7 @@ EOF
     previous_global=$(read_state_value global_share || true)
     previous_queue=$(read_state_value queue_share || true)
     observed_remote_any=$(read_state_value remote_any_observed || true)
-    if [[ $schema != printbridge.m0.cups-sharing-state.v1 || $saved_queue != "$queue" ||
+    if [[ $schema != quirewire.m0.cups-sharing-state.v1 || $saved_queue != "$queue" ||
           ! $previous_global =~ ^[01]$ || ! $previous_queue =~ ^[01]$ || $observed_remote_any != 0 ]]; then
       echo 'ERROR: ownership state is invalid or does not match the requested queue. Refusing restore.' >&2
       exit 65

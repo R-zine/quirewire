@@ -1,4 +1,4 @@
-/var/log/printbridge/*.log {
+/var/log/quirewire/*.log {
     weekly
     rotate 8
     size 1M

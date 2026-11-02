@@ -1,4 +1,4 @@
-PrintBridge M0 physical text-print test
+QuireWire M0 physical text-print test
 =======================================
 
 Required path:
@@ -8,7 +8,7 @@ Confirm on the physical sheet:
 [ ] The title and this checklist are legible.
 [ ] No text is clipped at the page edges.
 [ ] The arrow path above is complete.
-[ ] This token is present: PRINTBRIDGE-M0-TEXT-2026
+[ ] This token is present: QUIREWIRE-M0-TEXT-2026
 
 Record the Windows application used, CUPS job ID, and result in the M0 evidence.
 

@@ -12,8 +12,8 @@ Run from an ordinary PowerShell window unless a command explicitly displays a
 UAC prompt:
 
 ```powershell
-$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
-$cli = Join-Path $root 'bin\printbridgectl.exe'
+$root = Join-Path $env:LOCALAPPDATA 'QuireWire'
+$cli = Join-Path $root 'bin\quirewirectl.exe'
 & $cli status
 
 .\scripts\m9\windows\New-M9TestDocuments.ps1
@@ -86,7 +86,7 @@ Host reboot is an optional two-command stress check:
 
 ```powershell
 .\scripts\m9\windows\Invoke-M9HostReboot.ps1 -Action Prepare
-# Restart Windows, then log in normally. Do not manually start PrintBridge.
+# Restart Windows, then log in normally. Do not manually start QuireWire.
 .\scripts\m9\windows\Invoke-M9HostReboot.ps1 -Action Complete
 ```
 

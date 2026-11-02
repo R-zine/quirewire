@@ -3,7 +3,7 @@
 ## Toolchain
 
 - Windows 11 x64, PowerShell 5.1+, Git, and Rust from `rust-toolchain.toml`.
-- Node.js 24 and npm for the React/Tauri desktop.
+- Node.js 24.15+ and npm for the React/Tauri desktop.
 - Tauri 2 Windows prerequisites and an installed WebView2 runtime.
 - VirtualBox 7.1+ major-7 only for real-provider and hardware tests.
 
@@ -20,6 +20,7 @@ npm test
 npm run build
 Pop-Location
 
+.\tests\public\Invoke-PublicSourceTests.ps1
 $software = Get-ChildItem .\tests -Filter 'Invoke-M*SoftwareTests.ps1' -Recurse
 foreach ($test in $software) {
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File $test.FullName

@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$M4StatePath,
     [Parameter(Mandatory)][string]$AgentExecutable,
-    [string]$OutputPath = (Join-Path $env:LOCALAPPDATA 'PrintBridge\m6.conf'),
+    [string]$OutputPath = (Join-Path $env:LOCALAPPDATA 'QuireWire\m6.conf'),
     [string]$VBoxManage = (Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe')
 )
 
@@ -21,16 +21,16 @@ function Get-ExtraData([string]$Vm, [string]$Key) {
 }
 
 if (-not (Test-Path -LiteralPath $M4StatePath -PathType Leaf)) { throw 'M4 acceptance state is missing.' }
-if (-not (Test-Path -LiteralPath $AgentExecutable -PathType Leaf)) { throw 'Built printbridge-agent.exe is missing.' }
+if (-not (Test-Path -LiteralPath $AgentExecutable -PathType Leaf)) { throw 'Built quirewire-agent.exe is missing.' }
 if (-not (Test-Path -LiteralPath $VBoxManage -PathType Leaf)) { throw 'VBoxManage.exe is missing.' }
 
 $statePath = (Resolve-Path -LiteralPath $M4StatePath).Path
 $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
 $ownerPath = Join-Path (Split-Path -Parent $statePath) 'owner-acceptance.json'
-if ($state.schema -ne 'printbridge.m4.acceptance-state.v1') { throw 'State is not M4 acceptance evidence.' }
+if ($state.schema -ne 'quirewire.m4.acceptance-state.v1') { throw 'State is not M4 acceptance evidence.' }
 if (-not (Test-Path -LiteralPath $ownerPath -PathType Leaf)) { throw 'M4 owner acceptance is missing.' }
 $owner = Get-Content -Raw -LiteralPath $ownerPath | ConvertFrom-Json
-if ($owner.schema -ne 'printbridge.m4.owner-acceptance.v1' -or $owner.result -ne 'PASS: PHYSICAL' -or
+if ($owner.schema -ne 'quirewire.m4.owner-acceptance.v1' -or $owner.result -ne 'PASS: PHYSICAL' -or
     -not $owner.physical_page_printed -or $owner.physical_token -ne $state.physical_token) {
     throw 'M4 physical acceptance does not match the selected state.'
 }
@@ -38,9 +38,9 @@ if ($state.usb_id -ne '04f9:0567' -or $state.ipp_port -ne 8644) {
     throw 'The selected M4 evidence does not match the accepted USB/IPP endpoint.'
 }
 
-$liveSchema = Get-ExtraData $state.vm_uuid 'PrintBridge/Schema'
-$liveMarker = Get-ExtraData $state.vm_uuid 'PrintBridge/Owner'
-if ($liveSchema -ne 'printbridge.m4.acceptance-vm.v1' -or $liveMarker -ne $state.ownership_marker) {
+$liveSchema = Get-ExtraData $state.vm_uuid 'QuireWire/Schema'
+$liveMarker = Get-ExtraData $state.vm_uuid 'QuireWire/Owner'
+if ($liveSchema -ne 'quirewire.m4.acceptance-vm.v1' -or $liveMarker -ne $state.ownership_marker) {
     throw 'Live VM ownership metadata does not match accepted M4 evidence.'
 }
 
@@ -57,7 +57,7 @@ $directory = Split-Path -Parent $destination
 New-Item -ItemType Directory -Force -Path $directory | Out-Null
 
 $lines = @(
-    'schema=printbridge.m6.config.v1'
+    'schema=quirewire.m6.config.v1'
     "owner_sid=$sid"
     "vm_uuid=$($state.vm_uuid)"
     "vm_marker=$($state.ownership_marker)"
@@ -65,28 +65,28 @@ $lines = @(
     'usb_vendor_id=04f9'
     'usb_product_id=0567'
     "usb_serial=$serial"
-    'printer_name=Brother via PrintBridge'
+    'printer_name=Brother via QuireWire'
     "endpoint_port=$($state.ipp_port)"
     'scanner_port=8645'
-    'guest_queue=PrintBridge_DCP_L2600D'
+    'guest_queue=QuireWire_DCP_L2600D'
 )
 $temporary = Join-Path $directory ".m6-$PID.tmp"
 [IO.File]::WriteAllLines($temporary, $lines, [Text.UTF8Encoding]::new($false))
 Move-Item -LiteralPath $temporary -Destination $destination -Force
 
 & icacls.exe $directory '/inheritance:r' '/grant:r' "*$sid`:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the PrintBridge data directory ACL.' }
+if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the QuireWire data directory ACL.' }
 & icacls.exe $destination '/inheritance:r' '/grant:r' "*$sid`:F" '*S-1-5-18:F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the M6 configuration ACL.' }
 
 [pscustomobject]@{
-    schema = 'printbridge.m6.configuration-result.v1'
+    schema = 'quirewire.m6.configuration-result.v1'
     config_path = $destination
     owner_sid = $sid
     vm_uuid = $state.vm_uuid
     vm_schema = $liveSchema
     usb_id = '04f9:0567'
     usb_serial = 'present (redacted)'
-    endpoint = 'http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D'
+    endpoint = 'http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D'
     agent_executable = (Resolve-Path -LiteralPath $AgentExecutable).Path
 } | ConvertTo-Json

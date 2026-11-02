@@ -1,15 +1,15 @@
 # M5 Windows IPP integration runbook
 
-M5 operates on one queue named `Brother via PrintBridge` and the accepted M4
+M5 operates on one queue named `Brother via QuireWire` and the accepted M4
 loopback endpoint:
 
 ```text
-http://127.0.0.1:8644/printers/PrintBridge_DCP_L2600D
+http://127.0.0.1:8644/printers/QuireWire_DCP_L2600D
 ```
 
 The reference configuration is `scripts/m5/m5.conf`. The real adapter invokes
 Windows PowerShell with an argument vector and bounded timeout. Its ownership
-record is per-user at `%LOCALAPPDATA%\PrintBridge\m5-windows-printer.json`.
+record is per-user at `%LOCALAPPDATA%\QuireWire\m5-windows-printer.json`.
 Removal requires the live name, driver, port and ownership comment to match that
 record. It never removes a printer driver or port and refuses to remove the
 queue if it is the Windows default.
@@ -46,9 +46,9 @@ Do not infer paper output from these commands. The owner must inspect each sheet
 3. Install twice to prove idempotence, then inspect the result:
 
    ```powershell
-   cargo run -q -p printbridgectl -- --config .\scripts\m5\m5.conf printer install
-   cargo run -q -p printbridgectl -- --config .\scripts\m5\m5.conf printer install
-   cargo run -q -p printbridgectl -- --config .\scripts\m5\m5.conf printer status
+   cargo run -q -p quirewirectl -- --config .\scripts\m5\m5.conf printer install
+   cargo run -q -p quirewirectl -- --config .\scripts\m5\m5.conf printer install
+   cargo run -q -p quirewirectl -- --config .\scripts\m5\m5.conf printer status
    .\scripts\m5\windows\Collect-M5Diagnostics.ps1 -Phase Installed
    ```
 
@@ -60,7 +60,7 @@ Do not infer paper output from these commands. The owner must inspect each sheet
 4. Submit the CLI test page:
 
    ```powershell
-   cargo run -q -p printbridgectl -- --config .\scripts\m5\m5.conf printer test-page
+   cargo run -q -p quirewirectl -- --config .\scripts\m5\m5.conf printer test-page
    ```
 
    Preserve its correlation ID and optional Windows spooler job ID. The command
@@ -73,11 +73,11 @@ Do not infer paper output from these commands. The owner must inspect each sheet
    notepad.exe .\artifacts\m5\test-documents\m5-standard-app-text.txt
    ```
 
-   In Notepad choose **File > Print**, select `Brother via PrintBridge`, and
-   inspect token `PRINTBRIDGE-M5-TEXT-2026`. Open
+   In Notepad choose **File > Print**, select `Brother via QuireWire`, and
+   inspect token `QUIREWIRE-M5-TEXT-2026`. Open
    `artifacts\m5\test-documents\m5-standard-app-pdf.pdf` in Microsoft Edge or
    another normal PDF application, select the same queue, and inspect token
-   `PRINTBRIDGE-M5-PDF-IMAGE-2026` plus the checkerboard. Application print
+   `QUIREWIRE-M5-PDF-IMAGE-2026` plus the checkerboard. Application print
    dialogs—not `Out-Printer` or a CUPS page—are mandatory for these two checks.
 
 6. Reboot Windows. After login, ensure the accepted M4 appliance is running,
@@ -92,8 +92,8 @@ Do not infer paper output from these commands. The owner must inspect each sheet
    then run removal twice:
 
    ```powershell
-   cargo run -q -p printbridgectl -- --config .\scripts\m5\m5.conf printer remove
-   cargo run -q -p printbridgectl -- --config .\scripts\m5\m5.conf printer remove
+   cargo run -q -p quirewirectl -- --config .\scripts\m5\m5.conf printer remove
+   cargo run -q -p quirewirectl -- --config .\scripts\m5\m5.conf printer remove
    .\scripts\m5\windows\Collect-M5Diagnostics.ps1 -Phase Removed
    ```
 

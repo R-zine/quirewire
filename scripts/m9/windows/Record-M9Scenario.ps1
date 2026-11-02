@@ -24,8 +24,8 @@ if (-not (Test-Path -LiteralPath $EvidencePath -PathType Leaf)) { throw 'Scenari
 $resolvedEvidence = (Resolve-Path -LiteralPath $EvidencePath).Path
 try { $evidence = Get-Content -Raw -LiteralPath $resolvedEvidence | ConvertFrom-Json }
 catch { throw 'Scenario evidence is not valid JSON.' }
-if ([string]::IsNullOrWhiteSpace([string]$evidence.schema) -or [string]$evidence.schema -notmatch '^printbridge\.') {
-    throw 'Scenario evidence does not have a PrintBridge schema.'
+if ([string]::IsNullOrWhiteSpace([string]$evidence.schema) -or [string]$evidence.schema -notmatch '^quirewire\.') {
+    throw 'Scenario evidence does not have a QuireWire schema.'
 }
 $physicalRequired = $Scenario -notin @('second-instance', 'low-disk')
 if ($physicalRequired -and $OwnerConfirmedPhysical -eq 'not-applicable') {
@@ -43,13 +43,13 @@ $destination = Join-Path $OutputDirectory "$Scenario.json"
 if (Test-Path -LiteralPath $destination -PathType Leaf) {
     $existing = $null
     try { $existing = Get-Content -Raw -LiteralPath $destination | ConvertFrom-Json } catch { }
-    if (-not $Replace -or -not $existing -or $existing.schema -ne 'printbridge.m9.scenario-record.v1' -or
+    if (-not $Replace -or -not $existing -or $existing.schema -ne 'quirewire.m9.scenario-record.v1' -or
         $existing.scenario -ne $Scenario) {
         throw 'Refusing to overwrite an existing scenario record without -Replace and matching ownership.'
     }
 }
 [ordered]@{
-    schema = 'printbridge.m9.scenario-record.v1'
+    schema = 'quirewire.m9.scenario-record.v1'
     recorded_utc = [DateTime]::UtcNow.ToString('o')
     scenario = $Scenario
     result = $Result
@@ -63,5 +63,5 @@ if (Test-Path -LiteralPath $destination -PathType Leaf) {
     notes = $Notes
     caution = 'Software submission, queue drain, and CUPS state never prove physical paper output.'
 } | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $destination -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m9.scenario-record-result.v1'; path = $destination; scenario = $Scenario; result = $Result } | ConvertTo-Json
+[pscustomobject]@{ schema = 'quirewire.m9.scenario-record-result.v1'; path = $destination; scenario = $Scenario; result = $Result } | ConvertTo-Json
 if ($Result -ne 'PASS') { exit 2 }

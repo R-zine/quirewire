@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use printbridge_core::fake::{FakeAction, FakePlatform};
-use printbridge_domain::{
+use quirewire_core::fake::{FakeAction, FakePlatform};
+use quirewire_domain::{
     ComponentState, GuestPrinting, Hypervisor, JobState, OwnedVm, OwnershipMarker, Startup,
     UsbAccess, VmId, WindowsPrinting,
 };
@@ -41,7 +41,7 @@ fn fake_hypervisor_contract_is_owned_and_idempotent() {
 #[test]
 fn fake_hypervisor_import_records_ownership_marker() {
     let mut fake = FakePlatform::ready();
-    let marker = OwnershipMarker::new("printbridge.contract-test");
+    let marker = OwnershipMarker::new("quirewire.contract-test");
     let vm = fake
         .import(Path::new("fake-appliance.ova"), marker.clone())
         .expect("fake import");
@@ -96,7 +96,7 @@ fn fake_guest_print_contract_separates_cups_from_physical_output() {
 fn fake_windows_queue_contract_refuses_unowned_removal() {
     let mut fake = FakePlatform::ready();
     let (_, _, endpoint) = fake.selection();
-    let name = "Brother via PrintBridge Contract Test";
+    let name = "Brother via QuireWire Contract Test";
     let first = fake
         .register_owned_queue(name, &endpoint)
         .expect("register owned queue");

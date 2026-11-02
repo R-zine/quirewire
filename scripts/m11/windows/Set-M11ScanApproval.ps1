@@ -12,10 +12,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $configPathFull = [IO.Path]::GetFullPath($ConfigPath)
 if (-not (Test-Path -LiteralPath $configPathFull -PathType Leaf)) {
-    throw "PrintBridge configuration does not exist: $configPathFull"
+    throw "QuireWire configuration does not exist: $configPathFull"
 }
 $lines = @([IO.File]::ReadAllLines($configPathFull))
-if ($lines -notcontains 'schema=printbridge.m6.config.v1') {
+if ($lines -notcontains 'schema=quirewire.m6.config.v1') {
     throw 'The configuration schema is not the supported owner-protected schema.'
 }
 $scanPorts = @($lines | Where-Object { $_ -like 'scanner_port=*' })
@@ -40,7 +40,7 @@ if ($approvals.Count -eq 1 -and
 
 if ($Action -eq 'Status') {
     [pscustomobject]@{
-        schema = 'printbridge.m11.scan-approval.v1'
+        schema = 'quirewire.m11.scan-approval.v1'
         approved = $approvals.Count -eq 1
         port = [int]$scannerPort
         interface_alias = $aliases[0].Substring('lan_interface_alias='.Length)
@@ -64,7 +64,7 @@ finally {
     }
 }
 [pscustomobject]@{
-    schema = 'printbridge.m11.scan-approval.v1'
+    schema = 'quirewire.m11.scan-approval.v1'
     action = $Action
     approved = $Action -eq 'Approve'
     port = [int]$scannerPort

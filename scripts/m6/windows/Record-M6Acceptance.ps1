@@ -18,7 +18,7 @@ $answers = @($UiNeverLaunched, $LockedSessionPrinted, $LogonRecoveryPrinted, $Cu
     $SpoolerRecoveryPrinted, $UsbReconnectPrinted, $PhysicalPagePrinted)
 $passed = $answers -notcontains 'no'
 $record = [ordered]@{
-    schema = 'printbridge.m6.owner-acceptance.v1'
+    schema = 'quirewire.m6.owner-acceptance.v1'
     recorded_at_utc = (Get-Date).ToUniversalTime().ToString('o')
     result = if ($passed) { 'PASS: PHYSICAL' } else { 'FAIL' }
     ui_never_launched = ($UiNeverLaunched -eq 'yes')

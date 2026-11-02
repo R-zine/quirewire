@@ -10,7 +10,7 @@ use std::os::windows::process::CommandExt;
 use std::process::Command as ProcessCommand;
 
 use client::{AgentClient, DesktopError};
-use printbridge_ipc::{
+use quirewire_ipc::{
     AgentStatus, Command, DeviceSummary, Diagnostics, OperationResult, TestPrintResult,
 };
 use serde::Serialize;
@@ -144,7 +144,7 @@ async fn export_diagnostics(
         action: Some("Check your Windows Documents folder and try again.".into()),
         retryable: true,
     })?;
-    let directory = documents.join("PrintBridge");
+    let directory = documents.join("QuireWire");
     fs::create_dir_all(&directory).map_err(export_error)?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -162,7 +162,7 @@ async fn export_diagnostics(
 }
 
 #[tauri::command]
-async fn exit_printbridge(
+async fn exit_quirewire(
     app: AppHandle,
     client: State<'_, AgentClient>,
 ) -> Result<(), DesktopError> {
@@ -175,7 +175,7 @@ fn export_error(error: std::io::Error) -> DesktopError {
     DesktopError {
         code: "diagnostics_export_failed".into(),
         message: format!("Cannot write the diagnostic report: {error}"),
-        action: Some("Check access to Documents\\PrintBridge and try again.".into()),
+        action: Some("Check access to Documents\\QuireWire and try again.".into()),
         retryable: true,
     }
 }
@@ -190,7 +190,7 @@ fn show_main_window(app: &AppHandle) {
 
 fn emit_navigation(app: &AppHandle, screen: &str) {
     show_main_window(app);
-    let _ = app.emit("printbridge:navigate", screen);
+    let _ = app.emit("quirewire:navigate", screen);
 }
 
 fn spawn_tray_command(app: AppHandle, command: Command) {
@@ -201,13 +201,13 @@ fn spawn_tray_command(app: AppHandle, command: Command) {
             Ok(payload) => TrayOperation {
                 ok: true,
                 message: match payload {
-                    printbridge_ipc::Payload::TestPrint(value) => format!(
+                    quirewire_ipc::Payload::TestPrint(value) => format!(
                         "Test page accepted by Windows (job {}). Confirm the paper output.",
                         value
                             .spooler_job_id
                             .map_or_else(|| "unknown".into(), |id| id.to_string())
                     ),
-                    printbridge_ipc::Payload::Operation(value) => value.detail,
+                    quirewire_ipc::Payload::Operation(value) => value.detail,
                     _ => "Operation completed.".into(),
                 },
             },
@@ -216,12 +216,12 @@ fn spawn_tray_command(app: AppHandle, command: Command) {
                 message: error.message,
             },
         };
-        let _ = app.emit("printbridge:operation", event);
+        let _ = app.emit("quirewire:operation", event);
     });
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open PrintBridge", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Open QuireWire", true, None::<&str>)?;
     let test = MenuItem::with_id(app, "test", "Test page", true, None::<&str>)?;
     let restart = MenuItem::with_id(app, "restart", "Restart bridge", true, None::<&str>)?;
     let diagnostics =
@@ -229,15 +229,15 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let exit = MenuItem::with_id(
         app,
         "exit",
-        "Exit PrintBridge (stop sharing)",
+        "Exit QuireWire (stop sharing)",
         true,
         None::<&str>,
     )?;
     let menu = Menu::with_items(app, &[&open, &test, &restart, &diagnostics, &exit])?;
 
-    TrayIconBuilder::with_id("printbridge-tray")
+    TrayIconBuilder::with_id("quirewire-tray")
         .icon(app.default_window_icon().expect("desktop icon").clone())
-        .tooltip("PrintBridge — LAN printing and scanning are available while this app is running")
+        .tooltip("QuireWire — LAN printing and scanning are available while this app is running")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -259,7 +259,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                         Ok(_) => app.exit(0),
                         Err(error) => {
                             let _ = app.emit(
-                                "printbridge:operation",
+                                "quirewire:operation",
                                 TrayOperation {
                                     ok: false,
                                     message: error.message,
@@ -320,10 +320,10 @@ pub fn run() {
             agent_repair,
             open_scanner,
             export_diagnostics,
-            exit_printbridge,
+            exit_quirewire,
         ])
         .run(tauri::generate_context!())
-        .expect("PrintBridge desktop runtime failed");
+        .expect("QuireWire desktop runtime failed");
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ param(
     [ValidateSet('SecondInstance', 'VmCrash', 'GuestCupsRestart', 'PortConflict',
         'SpoolerRestart', 'ColdStart', 'LowDiskGuard')]
     [string]$Scenario,
-    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
+    [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'QuireWire'),
     [string]$OutputDirectory,
     [string]$VBoxManage = (Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe'),
     [ValidateRange(30, 600)][int]$RecoveryTimeoutSeconds = 300
@@ -24,7 +24,7 @@ foreach ($required in @($manifestPath, $configPath, $VBoxManage)) {
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
 $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-if ($manifest.schema -ne 'printbridge.m8.installation.v1' -or $manifest.owner_sid -ne $ownerSid -or
+if ($manifest.schema -ne 'quirewire.m8.installation.v1' -or $manifest.owner_sid -ne $ownerSid -or
     [IO.Path]::GetFullPath($manifest.data_root) -ne $DataRoot -or -not $manifest.vm) {
     throw 'The M8 manifest does not authorize this exact recovery target.'
 }
@@ -57,15 +57,15 @@ function Get-ExtraData([string]$Key) {
     if ($line -notmatch '^Value:\s*(.+)$') { throw "The owned VM is missing $Key." }
     $Matches[1].Trim()
 }
-if ((Get-ExtraData 'PrintBridge/Schema') -ne $manifest.vm.schema -or
-    (Get-ExtraData 'PrintBridge/Owner') -ne $manifest.vm.marker) {
+if ((Get-ExtraData 'QuireWire/Schema') -ne $manifest.vm.schema -or
+    (Get-ExtraData 'QuireWire/Owner') -ne $manifest.vm.marker) {
     throw 'The live VM no longer matches both manifest ownership values.'
 }
 
 function Invoke-Cli([string[]]$Arguments, [switch]$AllowFailure) {
     $lines = @(& $cliPath @Arguments 2>&1 | ForEach-Object { $_.ToString() })
     $code = $LASTEXITCODE
-    if (-not $AllowFailure -and $code -ne 0) { throw "PrintBridge CLI failed: $($Arguments -join ' ')" }
+    if (-not $AllowFailure -and $code -ne 0) { throw "QuireWire CLI failed: $($Arguments -join ' ')" }
     [pscustomobject]@{ code = $code; output = ($lines -join "`n") }
 }
 function Get-Status {
@@ -100,7 +100,7 @@ function Wait-Overall([string[]]$Accepted, [string]$Label) {
     throw "Timed out waiting for status: $($Accepted -join ', ')."
 }
 function Exact-AgentProcesses {
-    @(Get-CimInstance Win32_Process -Filter "Name='printbridge-agent.exe'" -ErrorAction SilentlyContinue |
+    @(Get-CimInstance Win32_Process -Filter "Name='quirewire-agent.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $agentPath })
 }
 function Inventory {
@@ -226,7 +226,7 @@ $finalAgentCount = $finalAgents.Count
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ')
 $path = Join-Path $OutputDirectory "$stamp-$($Scenario.ToLowerInvariant()).json"
 [ordered]@{
-    schema = 'printbridge.m9.recovery-scenario.v1'
+    schema = 'quirewire.m9.recovery-scenario.v1'
     scenario = $Scenario
     started_utc = $started.ToString('o')
     completed_utc = [DateTime]::UtcNow.ToString('o')
@@ -239,4 +239,4 @@ $path = Join-Path $OutputDirectory "$stamp-$($Scenario.ToLowerInvariant()).json"
     unrelated_vms_preserved = $true
     physical_output = if ($submission) { 'requires_owner_confirmation' } else { 'not_applicable' }
 } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding utf8
-[pscustomobject]@{ schema = 'printbridge.m9.recovery-result.v1'; path = $path; scenario = $Scenario; physical_output = if ($submission) { 'requires_owner_confirmation' } else { 'not_applicable' } } | ConvertTo-Json
+[pscustomobject]@{ schema = 'quirewire.m9.recovery-result.v1'; path = $path; scenario = $Scenario; physical_output = if ($submission) { 'requires_owner_confirmation' } else { 'not_applicable' } } | ConvertTo-Json

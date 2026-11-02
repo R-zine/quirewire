@@ -1,4 +1,4 @@
-PrintBridge M1 clean guest boot test
+QuireWire M1 clean guest boot test
 ====================================
 
 Required path:
@@ -8,7 +8,7 @@ Windows application -> Microsoft IPP Class Driver -> clean headless Debian boot
 Confirm on the physical sheet:
 [ ] The page is legible and not clipped.
 [ ] The complete path above is readable.
-[ ] This token is present: PRINTBRIDGE-M1-CLEAN-BOOT-2026
+[ ] This token is present: QUIREWIRE-M1-CLEAN-BOOT-2026
 
-Queue: Brother via PrintBridge M1
+Queue: Brother via QuireWire M1
 Milestone stage: clean ACPI shutdown followed by a headless cold start

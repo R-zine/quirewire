@@ -1,35 +1,35 @@
-# Using PrintBridge
+# Using QuireWire
 
-PrintBridge supports one Windows 11 x64 user, one accepted VirtualBox appliance,
+QuireWire supports one Windows 11 x64 user, one accepted VirtualBox appliance,
 and one tested Brother DCP-L2600D USB multifunction device. It provides
 driverless IPP printing and eSCL/AirScan scanning; fax is not supported.
 
 ## Normal printing
 
-1. Log in to the Windows account that installed PrintBridge and open
-   **PrintBridge**. It does not start at Windows login.
+1. Log in to the Windows account that installed QuireWire and open
+   **QuireWire**. It does not start at Windows login.
 2. Turn on and connect the printer. Windows may stop exposing the native USB
    device while the Linux guest owns it; this is expected whole-device capture.
-3. Wait for the PrintBridge dashboard/tray to show **Ready**. The window may be
+3. Wait for the QuireWire dashboard/tray to show **Ready**. The window may be
    closed to the tray, but the tray app must keep running.
 4. In Notepad, Chrome, or another ordinary application, select
-   **Brother via PrintBridge** and print normally.
+   **Brother via QuireWire** and print normally.
 5. If the application reports submission but no paper appears, check the
    dashboard and the printer itself. Software acceptance is not physical proof.
 
 For a phone or another computer, connect it to the same trusted, non-isolated
-local network and select the discovered **Brother via PrintBridge** printer.
+local network and select the discovered **Brother via QuireWire** printer.
 LAN sharing is limited to the explicitly approved Windows interface and IPv4
 subnet and exists only while the app is running. The reference approval permits
 `Ethernet 3` and `192.168.100.0/24` even though Windows labels that adapter
 Public; it permits nothing else on the Public profile.
 
 Closing the window hides it to the notification area and keeps printing active.
-**Exit PrintBridge (stop sharing)** unregisters LAN discovery, stops the owned
+**Exit QuireWire (stop sharing)** unregisters LAN discovery, stops the owned
 VM and agent, and releases their memory. The CLI equivalent is:
 
 ```powershell
-& "$env:LOCALAPPDATA\PrintBridge\bin\printbridgectl.exe" shutdown
+& "$env:LOCALAPPDATA\QuireWire\bin\quirewirectl.exe" shutdown
 ```
 
 Use `start`, `restart`, `status`, `test-print`, `diagnostics`, or `repair` with
@@ -39,7 +39,7 @@ you to inspect the sheet.
 ## Scanning
 
 Open the **Scan** screen and choose **Open scanner** to use the local AirSane web
-interface. Preview/downloaded scan files belong to the browser; the PrintBridge
+interface. Preview/downloaded scan files belong to the browser; the QuireWire
 agent does not receive or retain document bytes. Windows Scan can discover the
 same eSCL endpoint without a Brother Windows driver.
 
@@ -48,11 +48,11 @@ document-acquisition device. After approving TCP 8645 and running Repair,
 Android devices on the same trusted subnet can use the separate **Mopria Scan**
 app. If automatic discovery keeps searching, use Mopria Scan's three-dot menu,
 choose **Add Scanner**, and enter a display name plus the IPv4 address shown on
-PrintBridge's Scan screen. This is Mopria's documented fallback and does not
+QuireWire's Scan screen. This is Mopria's documented fallback and does not
 broaden the approved subnet. Mopria Print Service is for printing and does not
 provide scanning. macOS
 Image Capture and Linux `sane-airscan` are compatible eSCL consumers. Discovery
-and scanning exist only while PrintBridge is running; client isolation or routed
+and scanning exist only while QuireWire is running; client isolation or routed
 subnets are not supported.
 
 ## Reconnect and recovery
