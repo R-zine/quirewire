@@ -115,6 +115,12 @@ Pop-Location
 The complete build, test, signing and architecture notes are in
 [`docs/development.md`](docs/development.md).
 
+Enable the full software-only pre-commit quality gate once per checkout:
+
+```powershell
+.\scripts\quality\Install-GitHooks.ps1
+```
+
 ## Daily use
 
 1. Connect and power on the multifunction device.

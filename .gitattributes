@@ -1,5 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+.githooks/* text eol=lf
 *.sh text eol=lf
+*.patch text eol=lf
 guest/config/* text eol=lf
 guest/manifests/*.env text eol=lf

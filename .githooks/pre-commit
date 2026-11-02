@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+repository_root=$(git rev-parse --show-toplevel)
+
+exec powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+  -File "$repository_root/scripts/quality/Invoke-PreCommit.ps1"

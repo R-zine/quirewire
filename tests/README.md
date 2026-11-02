@@ -7,6 +7,9 @@ substitute for the physical acceptance gates in `SPEC.md`.
   metadata, AirSane provenance/hash, installer notices, readable README,
   complete rebrand, and absence of bundled appliances, vendor packages,
   private keys, or compiled binaries.
+- `quality/Invoke-QualityHookTests.ps1` verifies the version-controlled hook,
+  local-only installer, offline quality commands, CI parity, and strict
+  exclusion of physical and disposable-VM tests.
 - `m0/Invoke-M0SoftwareTests.ps1` verifies the M0 feasibility tools and fixtures.
 - `m1/Invoke-M1SoftwareTests.ps1` verifies the M1 diagnostics, redaction/safety
   invariants, lifecycle fixtures, and negative acceptance paths.

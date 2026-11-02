@@ -115,11 +115,13 @@ Check 'installer packages project and third-party notices' {
     ) | Where-Object { $_ -notin $resourceNames } | Measure-Object | Select-Object -ExpandProperty Count | ForEach-Object { $_ -eq 0 }
 }
 
-$readme = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'README.md')
+$readmePath = Join-Path $repositoryRoot 'README.md'
+$readme = Get-Content -Raw -LiteralPath $readmePath
+$readmeLines = @(Get-Content -LiteralPath $readmePath)
 $readmeSections = @('Features', 'Requirements', 'Installation status', 'Set up from source', 'Daily use', 'Tests and project status', 'Security and privacy', 'Licensing')
-$missingReadmeSections = @($readmeSections | Where-Object { $readme -notmatch "(?m)^## $([regex]::Escape($_))$" })
+$missingReadmeSections = @($readmeSections | Where-Object { "## $_" -notin $readmeLines })
 Check 'README covers product, features, requirements, setup, use, tests, security and licensing' {
-    $readme -match '(?m)^# QuireWire$' -and $missingReadmeSections.Count -eq 0
+    $readmeLines.Count -gt 0 -and $readmeLines[0] -eq '# QuireWire' -and $missingReadmeSections.Count -eq 0
 }
 
 $repoForGit = $repositoryRoot.Replace('\', '/')

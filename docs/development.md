@@ -27,6 +27,29 @@ foreach ($test in $software) {
 }
 ```
 
+## Pre-commit quality gate
+
+Enable the repository-owned hook once per checkout:
+
+```powershell
+.\scripts\quality\Install-GitHooks.ps1
+```
+
+The hook runs `git diff --cached --check`, locked/offline Cargo metadata,
+`cargo fmt`, Clippy with warnings denied, the complete Rust and frontend test
+suites, the frontend production build, the public-source/license audit, and
+every milestone software suite. It never invokes M3's disposable VirtualBox
+integration or any USB, printer, scanner, LAN, paper-output, or other physical
+acceptance test.
+
+Frontend dependencies must already be installed with `npm ci`; the hook does
+not modify dependencies or access the network. The same gate can be run without
+committing:
+
+```powershell
+.\scripts\quality\Invoke-PreCommit.ps1
+```
+
 The disposable real-VirtualBox integration requires the explicit accepted source
 UUID and deletes only its newly marked clone:
 
