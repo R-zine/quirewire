@@ -152,7 +152,7 @@ try {
     Invoke-NativeStep 'Rust formatting' {
         & $cargo fmt --all -- --check
     }
-    Invoke-NativeStep 'Rust Clippy' {
+    Invoke-NativeStep 'Rust Clippy (bootstrap once with cargo fetch --locked)' {
         & $cargo clippy --workspace --all-targets --all-features --offline -- -D warnings
     }
     Invoke-NativeStep 'Rust tests' {

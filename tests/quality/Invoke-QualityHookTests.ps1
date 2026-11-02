@@ -85,6 +85,11 @@ Check 'gate does not install dependencies or access the network' {
 Check 'CI runs the repository quality gate' {
     $workflow -match 'scripts/quality/Invoke-PreCommit\.ps1'
 }
+Check 'CI primes the locked Cargo cache before the offline gate' {
+    $fetchIndex = $workflow.IndexOf('cargo fetch --locked --target x86_64-pc-windows-msvc', [StringComparison]::Ordinal)
+    $gateIndex = $workflow.IndexOf('scripts/quality/Invoke-PreCommit.ps1', [StringComparison]::Ordinal)
+    $fetchIndex -ge 0 -and $gateIndex -gt $fetchIndex
+}
 Check 'developer guide documents hook installation and boundaries' {
     $development -match 'Install-GitHooks\.ps1' -and
         $development -match 'never invokes M3' -and $development -match 'physical\s+acceptance test'

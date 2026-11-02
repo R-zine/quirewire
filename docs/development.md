@@ -32,6 +32,10 @@ foreach ($test in $software) {
 Enable the repository-owned hook once per checkout:
 
 ```powershell
+cargo fetch --locked --target x86_64-pc-windows-msvc
+Push-Location .\apps\desktop
+npm ci
+Pop-Location
 .\scripts\quality\Install-GitHooks.ps1
 ```
 
@@ -42,7 +46,8 @@ every milestone software suite. It never invokes M3's disposable VirtualBox
 integration or any USB, printer, scanner, LAN, paper-output, or other physical
 acceptance test.
 
-Frontend dependencies must already be installed with `npm ci`; the hook does
+Rust dependencies must already be cached with `cargo fetch --locked`, and
+frontend dependencies must already be installed with `npm ci`. The hook does
 not modify dependencies or access the network. The same gate can be run without
 committing:
 
