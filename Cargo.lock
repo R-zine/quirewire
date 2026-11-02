@@ -2268,6 +2268,7 @@ dependencies = [
  "printbridge-ipc",
  "printbridge-provider-cups",
  "printbridge-provider-lan",
+ "printbridge-provider-scan",
  "printbridge-provider-virtualbox",
  "printbridge-provider-windows",
  "serde",
@@ -2322,6 +2323,14 @@ version = "0.1.0"
 dependencies = [
  "mdns-sd",
  "printbridge-domain",
+]
+
+[[package]]
+name = "printbridge-provider-scan"
+version = "0.1.0"
+dependencies = [
+ "printbridge-domain",
+ "quick-xml",
 ]
 
 [[package]]

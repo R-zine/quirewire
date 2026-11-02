@@ -7,18 +7,19 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use printbridge_domain::{
-    BridgeError, ComponentState, ComponentStatus, GuestPrinting, Hypervisor, JobState, OwnedVm,
-    OwnershipMarker, PrinterEndpoint, Startup, UsbAccess, UsbDevice, UsbIdentity, VmId,
-    WindowsPrinting,
+    BridgeError, ComponentState, ComponentStatus, GuestPrinting, GuestScanning, Hypervisor,
+    JobState, OwnedVm, OwnershipMarker, PrinterEndpoint, ScannerCapabilities, ScannerEndpoint,
+    Startup, UsbAccess, UsbDevice, UsbIdentity, VmId, WindowsPrinting,
 };
 use printbridge_ipc::{
     AgentComponents, AgentEvent, AgentStatus, Command, DeviceSummary, Diagnostics, ErrorPayload,
     LanStatus as WireLanStatus, OperationResult, PROTOCOL_VERSION, Payload, RequestEnvelope,
-    ResponseEnvelope, StartupStatus, TestPrintResult, WireComponent, WireComponentState, WireError,
-    read_request, write_response,
+    ResponseEnvelope, ScannerStatus, StartupStatus, TestPrintResult, WireComponent,
+    WireComponentState, WireError, read_request, write_response,
 };
 use printbridge_provider_cups::CupsIppProvider;
-use printbridge_provider_lan::{LanAdvertisement, LanAdvertiser};
+use printbridge_provider_lan::{LanAdvertisement, LanAdvertiser, ScanAdvertisement};
+use printbridge_provider_scan::EsclProvider;
 use printbridge_provider_virtualbox::VirtualBoxProvider;
 use printbridge_provider_windows::{
     WindowsLanProvider, WindowsPrintProvider, WindowsStartupProvider,
@@ -38,6 +39,8 @@ const STARTUP_CHECK_INTERVAL: Duration = Duration::from_secs(60);
 const DESKTOP_LEASE: Duration = Duration::from_secs(20);
 const MAX_EVENTS: usize = 128;
 const MAX_REQUEST_CACHE: usize = 128;
+const DEFAULT_SCANNER_PORT: u16 = 8645;
+const GUEST_SCANNER_PORT: u16 = 8090;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct M6Config {
@@ -47,7 +50,9 @@ pub struct M6Config {
     pub usb: UsbIdentity,
     pub printer_name: String,
     pub endpoint: PrinterEndpoint,
+    pub scanner_endpoint: ScannerEndpoint,
     pub approved_lan: Option<ApprovedLan>,
+    pub approved_scan_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,9 +93,11 @@ impl M6Config {
                     | "usb_serial"
                     | "printer_name"
                     | "endpoint_port"
+                    | "scanner_port"
                     | "guest_queue"
                     | "lan_interface_alias"
                     | "lan_subnet"
+                    | "lan_scan_port"
             ) {
                 return Err(config_error(format!("unknown key '{key}'")));
             }
@@ -135,6 +142,17 @@ impl M6Config {
         if port == 0 {
             return Err(config_error("endpoint_port must be non-zero"));
         }
+        let scanner_port = values
+            .get("scanner_port")
+            .map(String::as_str)
+            .unwrap_or("8645")
+            .parse::<u16>()
+            .map_err(|_| config_error("scanner_port must be 1-65535"))?;
+        if scanner_port == 0 || scanner_port == port {
+            return Err(config_error(
+                "scanner_port must be non-zero and distinct from endpoint_port",
+            ));
+        }
         let queue = required(&values, "guest_queue")?;
         if queue.is_empty()
             || queue.len() > 127
@@ -165,6 +183,20 @@ impl M6Config {
                 ));
             }
         };
+        let approved_scan_port = values
+            .get("lan_scan_port")
+            .map(|value| {
+                let value = value
+                    .parse::<u16>()
+                    .map_err(|_| config_error("lan_scan_port must be 1-65535"))?;
+                if value != scanner_port || approved_lan.is_none() {
+                    return Err(config_error(
+                        "lan_scan_port must equal scanner_port and requires an approved LAN",
+                    ));
+                }
+                Ok(value)
+            })
+            .transpose()?;
         Ok(Self {
             owner_sid: owner_sid.into(),
             vm: OwnedVm {
@@ -182,7 +214,9 @@ impl M6Config {
                 port,
                 queue: queue.into(),
             },
+            scanner_endpoint: ScannerEndpoint::loopback(scanner_port),
             approved_lan,
+            approved_scan_port,
         })
     }
 }
@@ -203,6 +237,10 @@ impl DesiredState {
     }
 }
 
+const fn default_scanner_port() -> u16 {
+    DEFAULT_SCANNER_PORT
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PersistedState {
@@ -216,12 +254,16 @@ struct PersistedState {
     usb_product_id: u16,
     usb_serial: Option<String>,
     endpoint_port: u16,
+    #[serde(default = "default_scanner_port")]
+    scanner_port: u16,
     guest_queue: String,
     printer_name: String,
     #[serde(default)]
     lan_interface_alias: Option<String>,
     #[serde(default)]
     lan_subnet: Option<String>,
+    #[serde(default)]
+    lan_scan_port: Option<u16>,
 }
 
 impl PersistedState {
@@ -237,6 +279,7 @@ impl PersistedState {
             usb_product_id: config.usb.product_id,
             usb_serial: config.usb.serial.clone(),
             endpoint_port: config.endpoint.port(),
+            scanner_port: config.scanner_endpoint.port,
             guest_queue: config.endpoint.queue().into(),
             printer_name: config.printer_name.clone(),
             lan_interface_alias: config
@@ -244,6 +287,7 @@ impl PersistedState {
                 .as_ref()
                 .map(|lan| lan.interface_alias.clone()),
             lan_subnet: config.approved_lan.as_ref().map(|lan| lan.subnet.clone()),
+            lan_scan_port: config.approved_scan_port,
         }
     }
 
@@ -256,6 +300,7 @@ impl PersistedState {
             && self.usb_product_id == config.usb.product_id
             && self.usb_serial == config.usb.serial
             && self.endpoint_port == config.endpoint.port()
+            && self.scanner_port == config.scanner_endpoint.port
             && self.guest_queue == config.endpoint.queue()
             && self.printer_name == config.printer_name
             && self.lan_interface_alias
@@ -264,6 +309,7 @@ impl PersistedState {
                     .as_ref()
                     .map(|lan| lan.interface_alias.clone())
             && self.lan_subnet == config.approved_lan.as_ref().map(|lan| lan.subnet.clone())
+            && self.lan_scan_port == config.approved_scan_port
     }
 }
 
@@ -354,6 +400,7 @@ struct Observation {
     components: AgentComponents,
     startup: StartupStatus,
     lan: WireLanStatus,
+    scanner: ScannerStatus,
 }
 
 trait ReconcileBackend: Send {
@@ -366,11 +413,13 @@ trait ReconcileBackend: Send {
 struct RealBackend {
     virtualbox: VirtualBoxProvider,
     cups: CupsIppProvider,
+    scanner: EsclProvider,
     windows: WindowsPrintProvider,
     startup: WindowsStartupProvider,
     lan_policy: WindowsLanProvider,
     advertiser: LanAdvertiser,
     lan_status: WireLanStatus,
+    scanner_status: ScannerStatus,
     startup_registered: Option<bool>,
     startup_checked: Option<Instant>,
 }
@@ -389,6 +438,7 @@ impl RealBackend {
         Ok(Self {
             virtualbox: VirtualBoxProvider::discover_with_ownership_schema(&config.vm_schema)?,
             cups: CupsIppProvider::new(config.endpoint.clone(), Duration::from_secs(5)),
+            scanner: EsclProvider::new(),
             windows: WindowsPrintProvider::discover(
                 config.printer_name.clone(),
                 config.endpoint.clone(),
@@ -397,6 +447,7 @@ impl RealBackend {
             lan_policy: WindowsLanProvider::discover(
                 config.vm.id.as_str(),
                 config.endpoint.port(),
+                config.approved_scan_port,
                 executable,
                 config
                     .approved_lan
@@ -406,6 +457,7 @@ impl RealBackend {
             )?,
             advertiser: LanAdvertiser::new(),
             lan_status: inactive_lan_status(),
+            scanner_status: inactive_scanner_status(config),
             startup_registered: None,
             startup_checked: None,
         })
@@ -454,6 +506,21 @@ impl RealBackend {
             self.lan_status = inactive_lan_status();
             return (component_error(&error), None);
         }
+        if let Some(scan_port) = config.approved_scan_port {
+            if let Err(error) = self.virtualbox.ensure_lan_escl_forward(
+                &config.vm,
+                address,
+                scan_port,
+                GUEST_SCANNER_PORT,
+            ) {
+                let _ = self.virtualbox.remove_lan_ipp_forward(&config.vm);
+                let _ = self.advertiser.stop();
+                self.lan_status = inactive_lan_status();
+                return (component_error(&error), None);
+            }
+        } else if let Err(error) = self.virtualbox.remove_lan_escl_forward(&config.vm) {
+            return (component_error(&error), None);
+        }
         let endpoint = format!(
             "ipp://{address}:{}/printers/{}",
             config.endpoint.port(),
@@ -475,15 +542,24 @@ impl RealBackend {
 
     fn deactivate_lan(&mut self, config: &M6Config, reason: &str) -> WireComponent {
         let advertisement = self.advertiser.stop();
-        let forwarding = self.virtualbox.remove_lan_ipp_forward(&config.vm);
+        let forwarding = self
+            .virtualbox
+            .remove_lan_ipp_forward(&config.vm)
+            .and_then(|()| self.virtualbox.remove_lan_escl_forward(&config.vm));
         self.lan_status = inactive_lan_status();
+        self.scanner_status.lan_url = None;
         match advertisement.and(forwarding) {
             Ok(()) => waiting(reason),
             Err(error_value) => error(error_value.to_string()),
         }
     }
 
-    fn activate_lan(&mut self, config: &M6Config, address: Ipv4Addr) -> WireComponent {
+    fn activate_lan(
+        &mut self,
+        config: &M6Config,
+        address: Ipv4Addr,
+        scanner_capabilities: Option<&ScannerCapabilities>,
+    ) -> WireComponent {
         let capabilities = match self.cups.advertisement() {
             Ok(value) => value,
             Err(error) => return component_error(&error),
@@ -501,10 +577,38 @@ impl RealBackend {
             color: capabilities.color,
             duplex: capabilities.duplex,
         };
-        match self.advertiser.start(advertisement) {
+        let scanner_advertisement = config.approved_scan_port.and_then(|port| {
+            scanner_capabilities.map(|capabilities| ScanAdvertisement {
+                instance_name: format!("{} Scanner", config.printer_name),
+                hostname: "printbridge-m4.local.".into(),
+                address,
+                port,
+                make_model: capabilities.make_model.clone(),
+                formats: capabilities.document_formats.clone(),
+                sources: capabilities.sources.clone(),
+                color_modes: capabilities.color_modes.clone(),
+                duplex: capabilities.duplex,
+                uuid: capabilities.uuid.clone(),
+            })
+        });
+        match self
+            .advertiser
+            .start_services(advertisement, scanner_advertisement)
+        {
             Ok(()) => {
                 self.lan_status.enabled = true;
-                ready("Available to devices on the explicitly approved local subnet")
+                self.scanner_status.lan_url = config.approved_scan_port.and_then(|port| {
+                    scanner_capabilities.map(|_| format!("http://{address}:{port}/"))
+                });
+                if scanner_capabilities.is_some() && config.approved_scan_port.is_some() {
+                    ready("Print and scan are available on the explicitly approved local subnet")
+                } else if config.approved_scan_port.is_none() {
+                    ready(
+                        "Printing is shared; scanning remains loopback-only until separately approved",
+                    )
+                } else {
+                    degraded("Printing is shared; scanner discovery is waiting for eSCL readiness")
+                }
             }
             Err(error_value) => error(error_value.to_string()),
         }
@@ -524,6 +628,7 @@ impl RealBackend {
                 usb: blocked("Guest is unavailable"),
                 cups: blocked("Guest is unavailable"),
                 windows_queue: self.windows_component(config),
+                scanner: blocked("Scanner service is unavailable"),
                 lan: blocked("LAN sharing is unavailable"),
             };
         }
@@ -537,18 +642,29 @@ impl RealBackend {
                     usb: blocked("Guest ownership could not be verified"),
                     cups: blocked("Guest is unavailable"),
                     windows_queue: self.windows_component(config),
+                    scanner: blocked("Scanner service is unavailable"),
                     lan,
                 };
             }
         };
         if guest_status.state == ComponentState::Stopped {
-            if let Err(error) = port_available(config.endpoint.port()) {
+            if let Err(error) = port_available(config.endpoint.port())
+                .and_then(|()| port_available(config.scanner_endpoint.port))
+                .and_then(|()| {
+                    self.virtualbox.ensure_scan_loopback_forward(
+                        &config.vm,
+                        config.scanner_endpoint.port,
+                        GUEST_SCANNER_PORT,
+                    )
+                })
+            {
                 return AgentComponents {
                     hypervisor,
                     guest: component_error(&error),
                     usb: blocked("Guest could not start"),
                     cups: blocked("Guest could not start"),
                     windows_queue: self.windows_component(config),
+                    scanner: blocked("Scanner service could not start"),
                     lan,
                 };
             }
@@ -562,6 +678,22 @@ impl RealBackend {
                 usb: blocked("Waiting for guest startup"),
                 cups: blocked("Waiting for guest startup"),
                 windows_queue: self.windows_component(config),
+                scanner: blocked("Waiting for guest startup"),
+                lan,
+            };
+        }
+        if let Err(error) = self.virtualbox.ensure_scan_loopback_forward(
+            &config.vm,
+            config.scanner_endpoint.port,
+            GUEST_SCANNER_PORT,
+        ) {
+            return AgentComponents {
+                hypervisor,
+                guest: component_error(&error),
+                usb: blocked("Scanner forwarding is unavailable"),
+                cups: blocked("Scanner forwarding is unavailable"),
+                windows_queue: self.windows_component(config),
+                scanner: component_error(&error),
                 lan,
             };
         }
@@ -592,9 +724,33 @@ impl RealBackend {
                 Err(error) => component_error(&error),
             };
         }
+        let (scanner, scanner_capabilities) = if usb.state == WireComponentState::Ready {
+            match self.scanner.probe_escl(&config.scanner_endpoint) {
+                Ok(capabilities) => {
+                    self.scanner_status = scanner_status(config, &capabilities);
+                    (
+                        ready(format!(
+                            "{} is available through driverless eSCL",
+                            capabilities.make_model
+                        )),
+                        Some(capabilities),
+                    )
+                }
+                Err(error) => {
+                    self.scanner_status = inactive_scanner_status(config);
+                    (component_error(&error), None)
+                }
+            }
+        } else {
+            self.scanner_status = inactive_scanner_status(config);
+            (
+                waiting("Scanner is waiting for the selected USB device"),
+                None,
+            )
+        };
         if let Some(address) = lan_address {
             if cups.state == WireComponentState::Ready && usb.state == WireComponentState::Ready {
-                lan = self.activate_lan(config, address);
+                lan = self.activate_lan(config, address, scanner_capabilities.as_ref());
             } else {
                 let _ = self.advertiser.stop();
                 self.lan_status.enabled = false;
@@ -608,6 +764,7 @@ impl RealBackend {
             usb,
             cups,
             windows_queue,
+            scanner,
             lan,
         }
     }
@@ -648,8 +805,12 @@ impl ReconcileBackend for RealBackend {
                 Ok(()) => stopped("Owned VM is stopped by desired state"),
                 Err(error) => component_error(&error),
             };
-            let forwarding = self.virtualbox.remove_lan_ipp_forward(&config.vm);
+            let forwarding = self
+                .virtualbox
+                .remove_lan_ipp_forward(&config.vm)
+                .and_then(|()| self.virtualbox.remove_lan_escl_forward(&config.vm));
             self.lan_status = inactive_lan_status();
+            self.scanner_status = inactive_scanner_status(config);
             let lan = match advertisement.and(forwarding) {
                 Ok(()) => stopped("LAN forwarding and discovery are off"),
                 Err(error) => component_error(&error),
@@ -660,6 +821,7 @@ impl ReconcileBackend for RealBackend {
                 usb: stopped("USB capture inactive while bridge is stopped"),
                 cups: stopped("CUPS endpoint inactive while bridge is stopped"),
                 windows_queue: self.windows_component(config),
+                scanner: stopped("eSCL endpoint inactive while bridge is stopped"),
                 lan,
             }
         } else {
@@ -669,6 +831,7 @@ impl ReconcileBackend for RealBackend {
             components,
             startup,
             lan: self.lan_status.clone(),
+            scanner: self.scanner_status.clone(),
         }
     }
 
@@ -937,6 +1100,7 @@ impl<B: ReconcileBackend> Supervisor<B> {
             components: observation.components,
             startup: observation.startup,
             lan: observation.lan,
+            scanner: observation.scanner,
         };
         if self.status != prior {
             let detail = self.status.overall.clone();
@@ -959,6 +1123,8 @@ impl<B: ReconcileBackend> Supervisor<B> {
                 "USB serial values are intentionally redacted from IPC, logs, and diagnostics."
                     .into(),
                 "Spooler acceptance and CUPS completion do not prove physical paper output.".into(),
+                "Scan documents and image bytes never pass through agent IPC, logs, or diagnostics."
+                    .into(),
                 "PrintBridge is on-demand: explicit Exit or a lost desktop heartbeat stops LAN sharing and the owned VM."
                     .into(),
             ],
@@ -1140,6 +1306,7 @@ fn initial_status(state: &PersistedState) -> AgentStatus {
             usb: connecting("Initial observation pending"),
             cups: connecting("Initial observation pending"),
             windows_queue: connecting("Initial observation pending"),
+            scanner: connecting("Initial observation pending"),
             lan: connecting("Initial observation pending"),
         },
         startup: StartupStatus {
@@ -1149,6 +1316,17 @@ fn initial_status(state: &PersistedState) -> AgentStatus {
                 "On-demand mode: no login task; explicit Exit stops sharing and the VM.".into(),
         },
         lan: inactive_lan_status(),
+        scanner: ScannerStatus {
+            available: false,
+            loopback_url: format!("http://127.0.0.1:{}/", state.scanner_port),
+            lan_url: None,
+            service_instance: None,
+            make_model: None,
+            sources: Vec::new(),
+            color_modes: Vec::new(),
+            document_formats: Vec::new(),
+            resolutions_dpi: Vec::new(),
+        },
     }
 }
 
@@ -1160,6 +1338,34 @@ fn inactive_lan_status() -> WireLanStatus {
         address: None,
         endpoint: None,
         service_instance: None,
+    }
+}
+
+fn inactive_scanner_status(config: &M6Config) -> ScannerStatus {
+    ScannerStatus {
+        available: false,
+        loopback_url: config.scanner_endpoint.web_url(),
+        lan_url: None,
+        service_instance: None,
+        make_model: None,
+        sources: Vec::new(),
+        color_modes: Vec::new(),
+        document_formats: Vec::new(),
+        resolutions_dpi: Vec::new(),
+    }
+}
+
+fn scanner_status(config: &M6Config, capabilities: &ScannerCapabilities) -> ScannerStatus {
+    ScannerStatus {
+        available: true,
+        loopback_url: config.scanner_endpoint.web_url(),
+        lan_url: None,
+        service_instance: Some(format!("{} Scanner", config.printer_name)),
+        make_model: Some(capabilities.make_model.clone()),
+        sources: capabilities.sources.clone(),
+        color_modes: capabilities.color_modes.clone(),
+        document_formats: capabilities.document_formats.clone(),
+        resolutions_dpi: capabilities.resolutions_dpi.clone(),
     }
 }
 
@@ -1229,6 +1435,7 @@ fn components_unhealthy(components: &AgentComponents) -> bool {
         components.usb.state,
         components.cups.state,
         components.windows_queue.state,
+        components.scanner.state,
         components.lan.state,
     ]
     .iter()
@@ -1253,6 +1460,7 @@ fn overall(desired: DesiredState, components: &AgentComponents) -> &'static str 
         components.usb.state,
         components.cups.state,
         components.windows_queue.state,
+        components.scanner.state,
         components.lan.state,
     ];
     if states
@@ -1415,7 +1623,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
     impl ReconcileBackend for FakeBackend {
         fn observe(
             &mut self,
-            _config: &M6Config,
+            config: &M6Config,
             desired: DesiredState,
             repair: bool,
         ) -> Observation {
@@ -1431,6 +1639,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
                         usb: stopped("stopped"),
                         cups: stopped("stopped"),
                         windows_queue: ready("ok"),
+                        scanner: stopped("stopped"),
                         lan: stopped("stopped"),
                     }
                 } else {
@@ -1442,6 +1651,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
                     logoff_behavior: "test".into(),
                 },
                 lan: inactive_lan_status(),
+                scanner: inactive_scanner_status(config),
             }
         }
 
@@ -1502,6 +1712,7 @@ guest_queue=PrintBridge_DCP_L2600D\n";
                 usb: ready("ok"),
                 cups: ready("ok"),
                 windows_queue: ready("ok"),
+                scanner: ready("ok"),
                 lan: ready("ok"),
             },
         };
@@ -1545,6 +1756,21 @@ guest_queue=PrintBridge_DCP_L2600D\n";
             ))
             .is_err()
         );
+    }
+
+    #[test]
+    fn scanner_lan_exposure_requires_separate_exact_port_approval() {
+        let base = format!(
+            "{CONFIG}scanner_port=8645\nlan_interface_alias=Ethernet 3\nlan_subnet=192.168.100.0/24\n"
+        );
+        let local_only = M6Config::parse(&base).expect("loopback scanner");
+        assert_eq!(local_only.scanner_endpoint.port, 8645);
+        assert_eq!(local_only.approved_scan_port, None);
+        let shared = M6Config::parse(&format!("{base}lan_scan_port=8645\n"))
+            .expect("separately approved scanner");
+        assert_eq!(shared.approved_scan_port, Some(8645));
+        assert!(M6Config::parse(&format!("{base}lan_scan_port=9999\n")).is_err());
+        assert!(M6Config::parse(&format!("{CONFIG}lan_scan_port=8645\n")).is_err());
     }
 
     #[test]

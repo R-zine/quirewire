@@ -22,6 +22,7 @@ const screens: { id: ScreenId; label: string; hint: string; icon: string }[] = [
   { id: "dashboard", label: "Overview", hint: "Bridge health", icon: "⌂" },
   { id: "setup", label: "Setup", hint: "Printer & USB", icon: "◇" },
   { id: "activity", label: "Print test", hint: "Jobs & output", icon: "▤" },
+  { id: "scan", label: "Scan", hint: "Documents & photos", icon: "S" },
   { id: "diagnostics", label: "Diagnostics", hint: "Repair & export", icon: "◫" },
   { id: "settings", label: "Settings", hint: "Startup & app", icon: "⚙" },
 ];
@@ -32,6 +33,7 @@ const componentLabels: Record<keyof AgentStatus["components"], string> = {
   usb: "USB printer",
   cups: "CUPS",
   windows_queue: "Windows queue",
+  scanner: "eSCL scanner",
   lan: "Local network",
 };
 
@@ -159,7 +161,7 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
       <aside className="sidebar" aria-label="Primary navigation">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true"><span /></div>
-          <div><strong>PrintBridge</strong><small>Local print companion</small></div>
+          <div><strong>PrintBridge</strong><small>Local print and scan</small></div>
         </div>
 
         <nav>
@@ -178,7 +180,7 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
 
         <div className="sidebar-health">
           <span className={`status-dot state-${stateTone(overall)}`} aria-hidden="true" />
-          <div><small>Printing engine</small><strong>{pretty(overall)}</strong></div>
+          <div><small>Bridge engine</small><strong>{pretty(overall)}</strong></div>
         </div>
       </aside>
 
@@ -253,6 +255,21 @@ export function App({ client, pollIntervalMs = 5000, tauriEvents = true }: AppPr
                   }}
                 />
               )}
+              {screen === "scan" && status && (
+                <ScanScreen
+                  status={status}
+                  busy={busy}
+                  onOpen={async () => {
+                    setBusy("open-scanner");
+                    try {
+                      await client.openScanner();
+                      setNotice("Scanner opened in your default browser.");
+                      setError(null);
+                    } catch (value) { showError(value); }
+                    finally { setBusy(null); }
+                  }}
+                />
+              )}
               {screen === "diagnostics" && status && (
                 <DiagnosticsScreen
                   diagnostics={diagnostics}
@@ -300,7 +317,7 @@ function ClosingState() {
       <span className="closing-spinner" aria-hidden="true" />
       <p className="eyebrow">Shutting down</p>
       <h1>Closing PrintBridge…</h1>
-      <p>Stopping local-network discovery, releasing the printer, and shutting down the owned virtual machine.</p>
+      <p>Stopping print and scan discovery, releasing the USB device, and shutting down the owned virtual machine.</p>
       <small>This window will close automatically when cleanup is complete.</small>
     </section>
   </main>;
@@ -353,7 +370,7 @@ function Setup({ status, devices, selectedDevice, consent, busy, onConsent, onSe
       {prerequisites.map(([label, item]) => <div className="check-row" key={label}><span className={`check-icon state-${stateTone(item.state)}`} aria-hidden="true">{item.state === "ready" ? "✓" : "!"}</span><div><strong>{label}</strong><p>{item.detail}</p></div><StatusBadge state={item.state as ComponentState} /></div>)}
     </section>
 
-    <section className="page-intro"><span className="step-number">2</span><div><p className="eyebrow">USB ownership</p><h2>Choose the printer</h2><p>The Linux guest captures the complete USB device. Scanning and vendor Windows utilities cannot use it while captured.</p></div></section>
+    <section className="page-intro"><span className="step-number">2</span><div><p className="eyebrow">USB ownership</p><h2>Choose the printer/scanner</h2><p>The Linux guest captures the complete USB device for both printing and eSCL scanning. Brother Windows utilities cannot use it while captured.</p></div></section>
     <div className="card">
       <div className="card-toolbar"><div><strong>USB printers</strong><small>Serial values are never shown or exported.</small></div><button className="button secondary" onClick={onDiscover} disabled={busy !== null}>{busy === "discover" ? "Scanning…" : "Scan for devices"}</button></div>
       {devices === null ? <EmptyState title="Scan when the USB printer is connected" detail="Only the device you explicitly confirm can be selected." /> : devices.length === 0 ? <EmptyState title="No compatible USB device found" detail="Connect and power on the printer, then scan again." /> : (
@@ -367,6 +384,37 @@ function Setup({ status, devices, selectedDevice, consent, busy, onConsent, onSe
       <label className="consent-row"><input type="checkbox" checked={consent} onChange={(event) => onConsent(event.target.checked)} /><span><strong>I understand this transfers the whole USB device</strong><small>Windows cannot use this device directly while PrintBridge owns it.</small></span></label>
       <div className="card-footer"><span>Setup changes only PrintBridge-owned resources.</span><button className="button primary" disabled={!consent || selectedDevice === null || busy !== null} onClick={onConfigure}>{busy === "setup" ? "Configuring…" : "Confirm and configure"}</button></div>
     </div>
+  </div>;
+}
+
+function ScanScreen({ status, busy, onOpen }: {
+  status: AgentStatus; busy: string | null; onOpen(): void;
+}) {
+  const scanner = status.scanner;
+  const manualIpv4 = scannerIpv4(scanner.lan_url);
+  return <div className="screen-stack">
+    <section className="test-card">
+      <div>
+        <p className="eyebrow">Driverless eSCL</p>
+        <h2>Scan from this PC</h2>
+        <p>Open the private scanner page to preview and download a document. Scan image bytes stay between your browser and the Linux scanner service; PrintBridge does not store them or place them in diagnostics.</p>
+      </div>
+      <button className="button primary large" onClick={onOpen} disabled={busy !== null || !scanner.available}>
+        {busy === "open-scanner" ? "Opening…" : "Open scanner"}
+      </button>
+    </section>
+    <section className="card diagnostics-card">
+      <div className="card-toolbar"><div><strong>{scanner.make_model ?? "Scanner unavailable"}</strong><small>{scanner.loopback_url}</small></div><StatusBadge state={status.components.scanner.state} /></div>
+      <dl className="details-list">
+        <div><dt>Sources</dt><dd>{scanner.sources.length ? scanner.sources.map(pretty).join(", ") : "Waiting for capabilities"}</dd></div>
+        <div><dt>Color modes</dt><dd>{scanner.color_modes.length ? scanner.color_modes.join(", ") : "Waiting for capabilities"}</dd></div>
+        <div><dt>File formats</dt><dd>{scanner.document_formats.length ? scanner.document_formats.join(", ") : "Waiting for capabilities"}</dd></div>
+        <div><dt>Resolutions</dt><dd>{scanner.resolutions_dpi.length ? scanner.resolutions_dpi.map((value) => `${value} dpi`).join(", ") : "Waiting for capabilities"}</dd></div>
+        <div><dt>Local network</dt><dd>{scanner.lan_url ?? "Scanner discovery is available only after the approved LAN and USB device are ready"}</dd></div>
+      </dl>
+    </section>
+    <section className="info-strip"><span aria-hidden="true">●</span><div><strong>Phones and computers use their normal scan app</strong><p>On Android, install or open Mopria Scan. Windows Scan, macOS Image Capture, and Linux AirScan clients can use the scanner while PrintBridge is running on the same trusted, non-isolated local network.</p></div></section>
+    <section className="info-strip"><span aria-hidden="true">+</span><div><strong>Android manual discovery fallback</strong><p>If Mopria Scan keeps searching, open its three-dot menu, choose Add Scanner, and enter the scanner name plus IPv4 address {manualIpv4 ?? "shown here after LAN scanning is ready"}. Manual addition stays limited to the approved local subnet.</p></div></section>
   </div>;
 }
 
@@ -399,9 +447,9 @@ function Settings({ status, theme, busy, onTheme, onStart, onStop, onExit }: {
 }) {
   return <div className="screen-stack narrow">
     <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">Appearance</p><h2>Theme</h2></div></div><fieldset className="segmented"><legend className="sr-only">Color theme</legend>{(["system", "light", "dark"] as ThemePreference[]).map((value) => <label key={value}><input type="radio" name="theme" checked={theme === value} onChange={() => onTheme(value)} /><span>{pretty(value)}</span></label>)}</fieldset><p className="setting-help">Theme preference stays in this UI process. No credentials or driver files are stored in webview storage.</p></section>
-    <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">On demand</p><h2>Printing engine</h2></div><StatusBadge state={status.startup.registered ? "error" : "ready"} /></div><div className="setting-row"><div><strong>No Windows login task</strong><p>{status.startup.logoff_behavior}</p></div><span className="read-only-label">App-owned</span></div><div className="setting-row"><div><strong>LAN endpoint</strong><p>{status.lan.endpoint ?? "Unavailable until an explicitly approved local subnet is active"}</p></div><span className="read-only-label">{status.lan.interface_alias ? `${status.lan.interface_alias} · ${pretty(status.lan.network_category ?? "unknown")}` : "Not shared"}</span></div><div className="engine-actions"><button className="button primary" onClick={onStart} disabled={busy !== null || status.desired === "running"}>Start engine</button><button className="button danger" onClick={onStop} disabled={busy !== null || status.desired === "stopped"}>Stop printing engine</button></div></section>
+    <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">On demand</p><h2>Print and scan engine</h2></div><StatusBadge state={status.startup.registered ? "error" : "ready"} /></div><div className="setting-row"><div><strong>No Windows login task</strong><p>{status.startup.logoff_behavior}</p></div><span className="read-only-label">App-owned</span></div><div className="setting-row"><div><strong>LAN print endpoint</strong><p>{status.lan.endpoint ?? "Unavailable until an explicitly approved local subnet is active"}</p></div><span className="read-only-label">{status.lan.interface_alias ? `${status.lan.interface_alias} · ${pretty(status.lan.network_category ?? "unknown")}` : "Not shared"}</span></div><div className="setting-row"><div><strong>LAN scan endpoint</strong><p>{status.scanner.lan_url ?? "Unavailable until the scanner and approved LAN are ready"}</p></div><span className="read-only-label">eSCL / AirScan</span></div><div className="engine-actions"><button className="button primary" onClick={onStart} disabled={busy !== null || status.desired === "running"}>Start engine</button><button className="button danger" onClick={onStop} disabled={busy !== null || status.desired === "stopped"}>Stop engine</button></div></section>
     <section className="settings-section"><div className="section-heading"><div><p className="eyebrow">Desktop behavior</p><h2>Window and tray</h2></div></div><div className="setting-row"><div><strong>Closing the window keeps printing active</strong><p>Close hides PrintBridge in the notification area. Explicit Exit stops LAN discovery, the agent, and the owned VM.</p></div><button className="button secondary" onClick={onExit}>Exit PrintBridge</button></div></section>
-    <section className="about-card"><div className="brand-mark small" aria-hidden="true"><span /></div><div><strong>PrintBridge 0.1.0</strong><p>Protocol v6 · Tauri 2 desktop</p></div><span>Printing only · scanner and fax are not supported</span></section>
+    <section className="about-card"><div className="brand-mark small" aria-hidden="true"><span /></div><div><strong>PrintBridge 0.1.0</strong><p>Protocol v7 · Tauri 2 desktop</p></div><span>Driverless IPP printing and eSCL scanning · fax is not supported</span></section>
   </div>;
 }
 
@@ -432,8 +480,20 @@ function pretty(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function scannerIpv4(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" && /^\d{1,3}(?:\.\d{1,3}){3}$/.test(parsed.hostname)
+      ? parsed.hostname
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function componentIcon(key: keyof AgentStatus["components"]): string {
-  return ({ hypervisor: "V", guest: "L", usb: "U", cups: "C", windows_queue: "W", lan: "N" })[key];
+  return ({ hypervisor: "V", guest: "L", usb: "U", cups: "C", windows_queue: "W", scanner: "S", lan: "N" })[key];
 }
 
 function overallGuidance(state: string): string {

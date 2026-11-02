@@ -1,7 +1,8 @@
 # Known limitations
 
 - Supported scope is one Windows 11 x64 computer, one interactive user, one
-  tested Brother DCP-L2600D (`04f9:0567`), and printing only.
+  tested Brother DCP-L2600D (`04f9:0567`), driverless IPP printing, and
+  eSCL/AirScan scanning.
 - The user must open PrintBridge when printing is needed. There is deliberately
   no login task; explicit Exit, logoff, or loss of the desktop heartbeat stops
   the agent, VM, and sharing.
@@ -9,8 +10,17 @@
   prerequisites. The installer does not silently download them.
 - The Brother Linux driver/configured appliance cannot currently be
   redistributed, so fresh appliance construction is not one click.
-- USB passthrough captures the whole multifunction device. Native Windows
-  scanning/faxing/printing cannot use it concurrently.
+- USB passthrough captures the whole multifunction device. Native Brother
+  Windows software and faxing cannot use it concurrently. PrintBridge
+  serializes guest printing/scanning; an active scan may make another scan or
+  print wait.
+- LAN scanning is unauthenticated trusted-LAN eSCL. It requires a separate
+  exact-port approval and must not be enabled on an untrusted or client-isolated
+  LAN. The tested Android Mopria Scan client required its documented manual
+  IPv4 add flow even though the host `_uscan._tcp` diagnostic resolved the live
+  advertisement; PrintBridge shows that approved address as a fallback. OCR,
+  scan-to-cloud, panel scan-button workflows, and proprietary vendor
+  scan applications are outside v1.
 - Status distinguishes Windows acceptance and observable CUPS state from paper.
   Physical output, jams, toner, and no-paper may not be reported reliably by
   this legacy driver/device.

@@ -18,6 +18,7 @@ const readyStatus = (): AgentStatus => ({
     usb: { state: "ready", detail: "Selected printer is attached" },
     cups: { state: "ready", detail: "CUPS is accepting jobs" },
     windows_queue: { state: "ready", detail: "Microsoft IPP Class Driver" },
+    scanner: { state: "ready", detail: "Brother DCP-L2600D is available through eSCL" },
     lan: { state: "ready", detail: "Available on explicitly approved LAN" },
   },
   startup: {
@@ -32,6 +33,17 @@ const readyStatus = (): AgentStatus => ({
     address: "192.168.1.20",
     endpoint: "ipp://192.168.1.20:8644/printers/PrintBridge_DCP_L2600D",
     service_instance: "Brother via PrintBridge",
+  },
+  scanner: {
+    available: true,
+    loopback_url: "http://127.0.0.1:8645/",
+    lan_url: "http://192.168.1.20:8645/",
+    service_instance: "Brother via PrintBridge Scanner",
+    make_model: "Brother DCP-L2600D",
+    sources: ["platen"],
+    color_modes: ["Grayscale8", "RGB24"],
+    document_formats: ["application/pdf", "image/jpeg"],
+    resolutions_dpi: [100, 150, 200, 300, 600],
   },
 });
 
@@ -62,6 +74,7 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
         usb: { state: "not_configured", detail: "Choose the USB printer" },
         cups: { state: "not_configured", detail: "Guest printing is not configured" },
         windows_queue: { state: "not_configured", detail: "Windows queue is not installed" },
+        scanner: { state: "not_configured", detail: "Guest scanning is not configured" },
         lan: { state: "not_configured", detail: "LAN sharing is not configured" },
       },
     };
@@ -114,7 +127,7 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
     this.calls.push("getDiagnostics");
     return {
       generated_at_unix_ms: Date.now(),
-      protocol_version: 6,
+      protocol_version: 7,
       owner_sid: "redacted-in-preview",
       pipe_name: "PrintBridge owner-only pipe",
       process_id: 1000,
@@ -135,6 +148,9 @@ export class FakePrintBridgeClient implements PrintBridgeClient {
   async exportDiagnostics() {
     this.calls.push("exportDiagnostics");
     return "Documents\\PrintBridge\\diagnostics-fake.json";
+  }
+  async openScanner() {
+    this.calls.push("openScanner");
   }
   async exitPrintBridge() {
     this.calls.push("exitPrintBridge");

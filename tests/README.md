@@ -32,6 +32,10 @@ substitute for the physical acceptance gates in `SPEC.md`.
   exact-owner Notepad/PDF application boundary, redacted metrics, bounded recovery scenarios,
   non-destructive low-disk simulation, complete physical matrix, documentation,
   and negative hardware-gate recorders.
+- `m11/Invoke-M11SoftwareTests.ps1` checks pinned scanner inputs, exact USB
+  permissions, offline guest provisioning, bounded eSCL parsing, protocol v7,
+  separately approved firewall/NAT resources, AirScan discovery, content-free
+  diagnostics, fixed local browser launch, and the no-paper physical gate.
 - `cargo test --workspace --all-features` runs domain, state-machine, retry,
   telemetry, protocol, CLI, fake-contract, command-parser, ownership, USB, and
   real-provider, secure-pipe, supervisor, startup, and desktop unit tests.

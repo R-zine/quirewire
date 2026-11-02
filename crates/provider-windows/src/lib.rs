@@ -79,6 +79,7 @@ pub struct WindowsLanConfig {
     pub script: PathBuf,
     pub owner_token: String,
     pub ipp_port: u16,
+    pub scan_port: Option<u16>,
     pub agent_executable: PathBuf,
     pub vbox_headless_executable: PathBuf,
     pub approved_interface_alias: Option<String>,
@@ -105,6 +106,7 @@ impl WindowsLanProvider<ProcessRunner> {
     pub fn discover(
         owner_token: impl Into<String>,
         ipp_port: u16,
+        scan_port: Option<u16>,
         agent_executable: impl Into<PathBuf>,
         approved_interface_alias: Option<String>,
         approved_subnet: Option<String>,
@@ -125,6 +127,7 @@ impl WindowsLanProvider<ProcessRunner> {
             script,
             owner_token: owner_token.into(),
             ipp_port,
+            scan_port,
             agent_executable: agent_executable.into(),
             vbox_headless_executable: PathBuf::from(program_files)
                 .join("Oracle/VirtualBox/VBoxHeadless.exe"),
@@ -172,6 +175,10 @@ impl<R: CommandRunner> WindowsLanProvider<R> {
                 .as_os_str()
                 .to_os_string(),
         ];
+        if let Some(scan_port) = self.config.scan_port {
+            arguments.push(OsString::from("-ScanPort"));
+            arguments.push(OsString::from(scan_port.to_string()));
+        }
         if let (Some(interface_alias), Some(subnet)) = (
             &self.config.approved_interface_alias,
             &self.config.approved_subnet,
@@ -840,6 +847,7 @@ mod tests {
                 script: "lan.ps1".into(),
                 owner_token: "00000000-0000-0000-0000-000000000004".into(),
                 ipp_port: 8644,
+                scan_port: Some(8645),
                 agent_executable: "agent.exe".into(),
                 vbox_headless_executable: "VBoxHeadless.exe".into(),
                 approved_interface_alias: Some("Ethernet".into()),

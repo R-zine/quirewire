@@ -33,6 +33,23 @@ pub const LAN_FORWARD_SCHEMA_KEY: &str = "PrintBridge/LanSchema";
 pub const LAN_FORWARD_SCHEMA_VALUE: &str = "printbridge.m10.lan-forward.v1";
 pub const LAN_FORWARD_RULE_KEY: &str = "PrintBridge/LanRule";
 pub const LAN_FORWARD_RULE_NAME: &str = "printbridge-m10-lan-ipp";
+pub const SCAN_LOOPBACK_SCHEMA_KEY: &str = "PrintBridge/ScanLoopbackSchema";
+pub const SCAN_LOOPBACK_RULE_KEY: &str = "PrintBridge/ScanLoopbackRule";
+pub const SCAN_LOOPBACK_SCHEMA_VALUE: &str = "printbridge.m11.scan-loopback.v1";
+pub const SCAN_LOOPBACK_RULE_NAME: &str = "printbridge-m11-escl";
+pub const SCAN_LAN_SCHEMA_KEY: &str = "PrintBridge/ScanLanSchema";
+pub const SCAN_LAN_RULE_KEY: &str = "PrintBridge/ScanLanRule";
+pub const SCAN_LAN_SCHEMA_VALUE: &str = "printbridge.m11.scan-lan.v1";
+pub const SCAN_LAN_RULE_NAME: &str = "printbridge-m11-lan-escl";
+
+#[derive(Clone, Copy)]
+struct ForwardOwnership {
+    schema_key: &'static str,
+    schema_value: &'static str,
+    rule_key: &'static str,
+    rule_name: &'static str,
+    description: &'static str,
+}
 
 #[derive(Debug, Clone)]
 pub struct VirtualBoxConfig {
@@ -299,67 +316,169 @@ impl<R: CommandRunner> VirtualBoxProvider<R> {
         guest_port: u16,
     ) -> Result<(), BridgeError> {
         validate_lan_forward(host_address, host_port, guest_port)?;
-        let mut machine = self.ensure_owned(vm)?;
-        let desired =
-            format!("{LAN_FORWARD_RULE_NAME},tcp,{host_address},{host_port},,{guest_port}");
-        let schema = self.extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
-        let marker = self.extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
-        let existing = nat_forward_rule(&machine, LAN_FORWARD_RULE_NAME)?;
-
-        match (existing.as_deref(), schema.as_deref(), marker.as_deref()) {
-            (Some(rule), Some(LAN_FORWARD_SCHEMA_VALUE), Some(marked)) if rule == marked => {
-                if rule == desired {
-                    return Ok(());
-                }
-                self.mutate_nat_forward(vm, true, rule)?;
-                machine = self.ensure_owned(vm)?;
-                if nat_forward_rule(&machine, LAN_FORWARD_RULE_NAME)?.is_some() {
-                    return Err(ownership_error(
-                        "the previously marker-owned LAN forward was not removed",
-                    ));
-                }
-            }
-            (None, None, None) => {}
-            (None, Some(LAN_FORWARD_SCHEMA_VALUE), Some(_)) => {
-                self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
-                self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
-            }
-            _ => {
-                return Err(ownership_error(
-                    "the reserved LAN forward name or metadata is not exactly owned",
-                ));
-            }
-        }
-
-        self.mutate_nat_forward(vm, false, &desired)?;
-        self.set_extra_data(
-            vm.id.as_str(),
-            LAN_FORWARD_SCHEMA_KEY,
-            LAN_FORWARD_SCHEMA_VALUE,
-        )?;
-        self.set_extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY, &desired)?;
-        let verified = self.ensure_owned(vm)?;
-        if nat_forward_rule(&verified, LAN_FORWARD_RULE_NAME)?.as_deref() != Some(desired.as_str())
-        {
-            return Err(BridgeError::Internal {
-                detail: "VirtualBox did not retain the exact LAN NAT forward".into(),
-            });
-        }
-        Ok(())
+        self.ensure_owned_forward(
+            vm,
+            host_address,
+            host_port,
+            guest_port,
+            ForwardOwnership {
+                schema_key: LAN_FORWARD_SCHEMA_KEY,
+                schema_value: LAN_FORWARD_SCHEMA_VALUE,
+                rule_key: LAN_FORWARD_RULE_KEY,
+                rule_name: LAN_FORWARD_RULE_NAME,
+                description: "LAN IPP",
+            },
+        )
     }
 
     /// Removes only the exact marker-owned M10 rule. Missing metadata plus a
     /// reserved live rule is treated as a collision, never as ownership.
     pub fn remove_lan_ipp_forward(&self, vm: &OwnedVm) -> Result<(), BridgeError> {
+        self.remove_owned_forward(
+            vm,
+            ForwardOwnership {
+                schema_key: LAN_FORWARD_SCHEMA_KEY,
+                schema_value: LAN_FORWARD_SCHEMA_VALUE,
+                rule_key: LAN_FORWARD_RULE_KEY,
+                rule_name: LAN_FORWARD_RULE_NAME,
+                description: "LAN IPP",
+            },
+        )
+    }
+
+    pub fn ensure_scan_loopback_forward(
+        &self,
+        vm: &OwnedVm,
+        host_port: u16,
+        guest_port: u16,
+    ) -> Result<(), BridgeError> {
+        if host_port == 0 || guest_port == 0 {
+            return Err(ownership_error("scanner forward ports must be non-zero"));
+        }
+        self.ensure_owned_forward(
+            vm,
+            std::net::Ipv4Addr::LOCALHOST,
+            host_port,
+            guest_port,
+            ForwardOwnership {
+                schema_key: SCAN_LOOPBACK_SCHEMA_KEY,
+                schema_value: SCAN_LOOPBACK_SCHEMA_VALUE,
+                rule_key: SCAN_LOOPBACK_RULE_KEY,
+                rule_name: SCAN_LOOPBACK_RULE_NAME,
+                description: "loopback eSCL",
+            },
+        )
+    }
+
+    pub fn ensure_lan_escl_forward(
+        &self,
+        vm: &OwnedVm,
+        host_address: std::net::Ipv4Addr,
+        host_port: u16,
+        guest_port: u16,
+    ) -> Result<(), BridgeError> {
+        validate_lan_forward(host_address, host_port, guest_port)?;
+        self.ensure_owned_forward(
+            vm,
+            host_address,
+            host_port,
+            guest_port,
+            ForwardOwnership {
+                schema_key: SCAN_LAN_SCHEMA_KEY,
+                schema_value: SCAN_LAN_SCHEMA_VALUE,
+                rule_key: SCAN_LAN_RULE_KEY,
+                rule_name: SCAN_LAN_RULE_NAME,
+                description: "LAN eSCL",
+            },
+        )
+    }
+
+    pub fn remove_lan_escl_forward(&self, vm: &OwnedVm) -> Result<(), BridgeError> {
+        self.remove_owned_forward(
+            vm,
+            ForwardOwnership {
+                schema_key: SCAN_LAN_SCHEMA_KEY,
+                schema_value: SCAN_LAN_SCHEMA_VALUE,
+                rule_key: SCAN_LAN_RULE_KEY,
+                rule_name: SCAN_LAN_RULE_NAME,
+                description: "LAN eSCL",
+            },
+        )
+    }
+
+    fn ensure_owned_forward(
+        &self,
+        vm: &OwnedVm,
+        host_address: std::net::Ipv4Addr,
+        host_port: u16,
+        guest_port: u16,
+        ownership: ForwardOwnership,
+    ) -> Result<(), BridgeError> {
+        let mut machine = self.ensure_owned(vm)?;
+        let desired = format!(
+            "{},tcp,{host_address},{host_port},,{guest_port}",
+            ownership.rule_name
+        );
+        let schema = self.extra_data(vm.id.as_str(), ownership.schema_key)?;
+        let marker = self.extra_data(vm.id.as_str(), ownership.rule_key)?;
+        let existing = nat_forward_rule(&machine, ownership.rule_name)?;
+        match (existing.as_deref(), schema.as_deref(), marker.as_deref()) {
+            (Some(rule), Some(schema), Some(marked))
+                if schema == ownership.schema_value && rule == marked =>
+            {
+                if rule == desired {
+                    return Ok(());
+                }
+                self.mutate_nat_forward(vm, true, ownership.rule_name, rule)?;
+                machine = self.ensure_owned(vm)?;
+                if nat_forward_rule(&machine, ownership.rule_name)?.is_some() {
+                    return Err(ownership_error(
+                        "the previously marker-owned forward was not removed",
+                    ));
+                }
+            }
+            (None, None, None) => {}
+            (None, Some(schema), Some(_)) if schema == ownership.schema_value => {
+                self.clear_extra_data(vm.id.as_str(), ownership.rule_key)?;
+                self.clear_extra_data(vm.id.as_str(), ownership.schema_key)?;
+            }
+            _ => {
+                return Err(ownership_error(
+                    "the reserved forward name or metadata is not exactly owned",
+                ));
+            }
+        }
+        self.mutate_nat_forward(vm, false, ownership.rule_name, &desired)?;
+        self.set_extra_data(vm.id.as_str(), ownership.schema_key, ownership.schema_value)?;
+        self.set_extra_data(vm.id.as_str(), ownership.rule_key, &desired)?;
+        let verified = self.ensure_owned(vm)?;
+        if nat_forward_rule(&verified, ownership.rule_name)?.as_deref() != Some(desired.as_str()) {
+            return Err(BridgeError::Internal {
+                detail: format!(
+                    "VirtualBox did not retain the exact {} NAT forward",
+                    ownership.description
+                ),
+            });
+        }
+        Ok(())
+    }
+
+    fn remove_owned_forward(
+        &self,
+        vm: &OwnedVm,
+        ownership: ForwardOwnership,
+    ) -> Result<(), BridgeError> {
         let machine = self.ensure_owned(vm)?;
-        let existing = nat_forward_rule(&machine, LAN_FORWARD_RULE_NAME)?;
-        let schema = self.extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
-        let marker = self.extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
+        let existing = nat_forward_rule(&machine, ownership.rule_name)?;
+        let schema = self.extra_data(vm.id.as_str(), ownership.schema_key)?;
+        let marker = self.extra_data(vm.id.as_str(), ownership.rule_key)?;
         match (existing.as_deref(), schema.as_deref(), marker.as_deref()) {
             (None, None, None) => return Ok(()),
-            (None, Some(LAN_FORWARD_SCHEMA_VALUE), Some(_)) => {}
-            (Some(rule), Some(LAN_FORWARD_SCHEMA_VALUE), Some(marked)) if rule == marked => {
-                self.mutate_nat_forward(vm, true, rule)?;
+            (None, Some(schema), Some(_)) if schema == ownership.schema_value => {}
+            (Some(rule), Some(schema), Some(marked))
+                if schema == ownership.schema_value && rule == marked =>
+            {
+                self.mutate_nat_forward(vm, true, ownership.rule_name, rule)?;
             }
             _ => {
                 return Err(ownership_error(
@@ -367,8 +486,8 @@ impl<R: CommandRunner> VirtualBoxProvider<R> {
                 ));
             }
         }
-        self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_RULE_KEY)?;
-        self.clear_extra_data(vm.id.as_str(), LAN_FORWARD_SCHEMA_KEY)?;
+        self.clear_extra_data(vm.id.as_str(), ownership.rule_key)?;
+        self.clear_extra_data(vm.id.as_str(), ownership.schema_key)?;
         Ok(())
     }
 
@@ -376,6 +495,7 @@ impl<R: CommandRunner> VirtualBoxProvider<R> {
         &self,
         vm: &OwnedVm,
         delete: bool,
+        rule_name: &str,
         rule: &str,
     ) -> Result<(), BridgeError> {
         let state = self.vm_power_state(vm)?;
@@ -400,7 +520,7 @@ impl<R: CommandRunner> VirtualBoxProvider<R> {
         };
         if delete {
             arguments.push(OsString::from("delete"));
-            arguments.push(OsString::from(LAN_FORWARD_RULE_NAME));
+            arguments.push(OsString::from(rule_name));
         } else {
             arguments.push(OsString::from(rule));
         }
@@ -1216,6 +1336,12 @@ mod tests {
         ))
     }
 
+    fn machine_with(state: &str, extra: &str) -> Result<CommandOutput, BridgeError> {
+        output(&format!(
+            "UUID=\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\"\nVMState=\"{state}\"\n{extra}"
+        ))
+    }
+
     fn schema() -> Result<CommandOutput, BridgeError> {
         output("Value: printbridge.m3.owned-vm.v1\n")
     }
@@ -1580,5 +1706,57 @@ mod tests {
         );
         assert!(super::validate_lan_forward("192.168.1.20".parse().unwrap(), 8644, 631).is_ok());
         assert!(super::validate_lan_forward("127.0.0.1".parse().unwrap(), 8644, 631).is_err());
+    }
+
+    #[test]
+    fn scanner_loopback_forward_is_exactly_named_and_marker_owned() {
+        let desired = "printbridge-m11-escl,tcp,127.0.0.1,8645,,8090";
+        let provider = VirtualBoxProvider::with_runner(
+            VirtualBoxConfig::new("VBoxManage.exe"),
+            ScriptedRunner::new(vec![
+                machine("poweroff"),
+                schema(),
+                marker(),
+                output("No value set!\n"),
+                output("No value set!\n"),
+                machine("poweroff"),
+                schema(),
+                marker(),
+                output(""),
+                output(""),
+                output(""),
+                machine_with("poweroff", &format!("Forwarding(2)=\"{desired}\"\n")),
+                schema(),
+                marker(),
+            ]),
+        );
+        provider
+            .ensure_scan_loopback_forward(&owned_vm(), 8645, 8090)
+            .expect("owned scan forward");
+        let calls: Vec<Vec<String>> = provider
+            .runner
+            .calls()
+            .into_iter()
+            .map(|call| {
+                call.into_iter()
+                    .map(|part| part.to_string_lossy().into_owned())
+                    .collect()
+            })
+            .collect();
+        assert!(calls.iter().any(|call| {
+            call == &[
+                "modifyvm",
+                "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                "--natpf1",
+                desired,
+            ]
+        }));
+        assert!(calls.iter().any(|call| {
+            call.get(2)
+                .is_some_and(|value| value == "PrintBridge/ScanLoopbackSchema")
+                && call
+                    .get(3)
+                    .is_some_and(|value| value == "printbridge.m11.scan-loopback.v1")
+        }));
     }
 }

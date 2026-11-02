@@ -40,7 +40,8 @@ if ($Action -eq 'Status') {
 }
 
 $next = @($lines | Where-Object {
-    $_ -notlike 'lan_interface_alias=*' -and $_ -notlike 'lan_subnet=*'
+    $_ -notlike 'lan_interface_alias=*' -and $_ -notlike 'lan_subnet=*' -and
+    $_ -notlike 'lan_scan_port=*'
 })
 if ($Action -eq 'Approve') {
     if ([string]::IsNullOrWhiteSpace($InterfaceAlias) -or

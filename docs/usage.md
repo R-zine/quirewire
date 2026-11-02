@@ -1,8 +1,8 @@
 # Using PrintBridge
 
 PrintBridge supports one Windows 11 x64 user, one accepted VirtualBox appliance,
-and one tested Brother DCP-L2600D USB printer. Printing—not scanning or faxing—is
-the supported function.
+and one tested Brother DCP-L2600D USB multifunction device. It provides
+driverless IPP printing and eSCL/AirScan scanning; fax is not supported.
 
 ## Normal printing
 
@@ -36,14 +36,33 @@ Use `start`, `restart`, `status`, `test-print`, `diagnostics`, or `repair` with
 the same CLI. `test-print` reports Windows spooler acceptance and still requires
 you to inspect the sheet.
 
+## Scanning
+
+Open the **Scan** screen and choose **Open scanner** to use the local AirSane web
+interface. Preview/downloaded scan files belong to the browser; the PrintBridge
+agent does not receive or retain document bytes. Windows Scan can discover the
+same eSCL endpoint without a Brother Windows driver.
+
+LAN scanning is a separate approval from LAN printing because it exposes a
+document-acquisition device. After approving TCP 8645 and running Repair,
+Android devices on the same trusted subnet can use the separate **Mopria Scan**
+app. If automatic discovery keeps searching, use Mopria Scan's three-dot menu,
+choose **Add Scanner**, and enter a display name plus the IPv4 address shown on
+PrintBridge's Scan screen. This is Mopria's documented fallback and does not
+broaden the approved subnet. Mopria Print Service is for printing and does not
+provide scanning. macOS
+Image Capture and Linux `sane-airscan` are compatible eSCL consumers. Discovery
+and scanning exist only while PrintBridge is running; client isolation or routed
+subnets are not supported.
+
 ## Reconnect and recovery
 
 - After unplugging USB, status should become **Waiting for USB**. Reconnect the
   same printer and allow bounded recovery; do not select a similar unknown USB
   device.
 - After sleep or a guest failure, keep the app running and allow several minutes
-  for the VM, USB capture, CUPS, and queues to reconcile. After reboot, open the
-  app yourself.
+  for the VM, USB capture, CUPS, eSCL, and queues to reconcile. After reboot,
+  open the app yourself.
 - If status remains unhealthy, choose **Repair**. Queue creation may show one
   UAC prompt; the persistent agent remains non-elevated.
 - Printing is intentionally unavailable while the app is exited, before login,

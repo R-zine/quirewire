@@ -4,8 +4,8 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "PrintBridge Project",
-    "shortDescription": "Local USB-to-IPP printing bridge",
-    "longDescription": "PrintBridge connects an owner-selected USB printer to the Windows inbox IPP print stack through a private Linux guest.",
+    "shortDescription": "Local USB print and scan bridge",
+    "longDescription": "PrintBridge connects an owner-selected USB multifunction device to driverless IPP printing and eSCL scanning through a private Linux guest.",
     "resources": {
       "../../../target/release/printbridge-agent.exe": "bin/printbridge-agent.exe",
       "../../../target/release/printbridgectl.exe": "bin/printbridgectl.exe",
@@ -18,6 +18,8 @@
       "../../../scripts/m10/windows/Invoke-M10LanSharing.ps1": "scripts/m10/windows/Invoke-M10LanSharing.ps1",
       "../../../scripts/m10/windows/Set-M10LanApproval.ps1": "scripts/m10/windows/Set-M10LanApproval.ps1",
       "../../../scripts/m10/windows/Test-M10LanIpp.ps1": "scripts/m10/windows/Test-M10LanIpp.ps1",
+      "../../../scripts/m11/windows/Test-M11Escl.ps1": "scripts/m11/windows/Test-M11Escl.ps1",
+      "../../../scripts/m11/windows/Set-M11ScanApproval.ps1": "scripts/m11/windows/Set-M11ScanApproval.ps1",
       "../../../guest/": "guest/",
       "../../../docs/install.md": "docs/install.md",
       "../../../docs/licensing.md": "docs/licensing.md"

@@ -67,6 +67,7 @@ $lines = @(
     "usb_serial=$serial"
     'printer_name=Brother via PrintBridge'
     "endpoint_port=$($state.ipp_port)"
+    'scanner_port=8645'
     'guest_queue=PrintBridge_DCP_L2600D'
 )
 $temporary = Join-Path $directory ".m6-$PID.tmp"

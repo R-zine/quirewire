@@ -6,11 +6,19 @@
 > printing, and “Exit UI”. Historical milestone reports remain evidence of what
 > was tested at the time; they are not the current lifecycle contract.
 
+> **M11 direction change (2026-10-31):** The selected multifunction device's
+> scanner is now in scope while PrintBridge is running. M11 adds a SANE-backed
+> eSCL/AirScan service for the local Windows host and explicitly approved
+> household LAN. “All consumers” means the PrintBridge desktop/browser path,
+> CLI diagnostics, Windows Ready Print/Windows Scan, Android Mopria Scan, and
+> standards-compatible macOS/Linux eSCL clients. It does not mean every
+> proprietary vendor application or routed/cloud access.
+
 **Status:** Proposed engineering specification; hardware feasibility is **NOT YET VERIFIED**.  
-**Target:** Windows 11 x64 host, USB-connected legacy Brother multifunction printer, Linux-supported print function.  
+**Target:** Windows 11 x64 host, USB-connected legacy Brother multifunction printer, Linux-supported print and scan functions.
 **Initial delivery:** Single-user, one printer, one Windows machine.  
-**Reference stack:** Rust workspace, VirtualBox provider, minimal Debian-family Linux guest, CUPS, Windows inbox IPP printing, Tauri 2 + React/TypeScript UI.  
-**Primary requirement:** Printing works through standard Windows Print dialogs without installing a Brother-specific Windows printer driver.
+**Reference stack:** Rust workspace, VirtualBox provider, minimal Debian-family Linux guest, CUPS, SANE/AirSane, Windows inbox IPP/eSCL support, Tauri 2 + React/TypeScript UI.
+**Primary requirement:** Printing works through standard Windows Print dialogs and scanning works through standard eSCL/AirScan clients without installing Brother-specific Windows print or scanner drivers.
 
 ## 0. Agent execution contract — read first
 
@@ -46,10 +54,16 @@ A user plugs in a USB printer that works with Linux but no longer works with ven
 - Idempotent installation and setup, safe repair, controlled restart, diagnostics export, clean uninstallation preserving third-party assets.
 - No Brother-specific Windows printer driver required. Expose only the selected IPP queue on one explicitly approved Windows interface and IPv4 subnet; never expose CUPS administration, SSH, named-pipe control, or arbitrary guest services to the LAN.
 - Advertise the queue with DNS-SD (`_ipp._tcp`) using capabilities actually reported by CUPS so AirPrint/Mopria-compatible clients can discover it while PrintBridge is running.
+- Expose the selected scanner through a guest SANE backend and eSCL/AirScan,
+  advertised as `_uscan._tcp` only on the same explicitly approved interface
+  and subnet. Provide a browser fallback so a native scan client is not
+  mandatory.
 
 ### Non-goals for v1
 
-- Scanner/fax support; printing is the only mandatory function of the multifunction device.
+- Fax, OCR, scan-to-cloud, physical-panel scan-button workflows, and support for
+  proprietary vendor scan applications. Scanner sources, color modes,
+  resolutions and formats not reported by the live backend are not promised.
 - Multiple printers, Windows-on-ARM, pre-login/login-start printing, cloud printing, remote administration, routed/VPN/internet printing, or unapproved/broad Public-profile sharing.
 - Writing a Windows kernel printer driver, custom port monitor, or new IPP implementation for v1.
 - Promising support for every Brother/USB printer, full vendor print-options parity, or rescuing a broken Windows print spooler in all cases.
@@ -73,18 +87,21 @@ Rust PrintBridge Agent (background, non-UI)
   +-- HypervisorProvider (initial: VirtualBox CLI adapter)
   +-- UsbProvider        (initial: VirtualBox USB host discovery/filter)
   +-- GuestPrinter       (CUPS IPP + guest provisioning/diagnostics)
+  +-- GuestScanner       (SANE + eSCL/AirScan health/capabilities)
   +-- WindowsPrinter     (Windows PrintManagement/IPP adapter)
   +-- LanProvider        (approved interface/subnet policy + DNS-SD)
              |
      VirtualBox headless Linux guest
      CUPS shared printer + working Linux driver
+     SANE backend + eSCL/web scan service
              |
      captured USB Brother multifunction device
 
 Windows applications --> Windows inbox IPP queue --> loopback NAT forward --+
 Phones/LAN devices --> DNS-SD + approved-interface/subnet IPP forward -------+
+Windows/LAN scan clients --> DNS-SD + approved-interface/subnet eSCL forward-+
                                                                            v
-                         guest CUPS queue --> Linux driver --> USB printer
+                         guest print/scan drivers --> USB multifunction device
 ```
 
 **Hard architectural rule:** UI does not import VirtualBox, printer setup scripts, or USB code. `printbridgectl` also talks to the same agent API. Provider implementations cannot import the UI crate. Rust domain/core crates contain no Tauri symbols.
@@ -109,6 +126,7 @@ printbridge/
     core/                     # orchestrator, state machine, reconciliation
     provider-virtualbox/      # VBoxManage process adapter and parsing
     provider-cups/            # IPP health/jobs, Linux guest management
+    provider-scan/            # eSCL health/capability and scan endpoint model
     provider-lan/             # scoped DNS-SD IPP advertisement
     provider-windows/         # Windows IPP printer/USB/system integration
     ipc/                      # versioned named-pipe protocol
@@ -133,24 +151,57 @@ Define small Rust traits behind provider boundaries, with async behavior only wh
 - `Hypervisor`: `detect`, `import`, `start_headless`, `stop_gracefully`, `state`, `delete_owned_vm`.
 - `UsbAccess`: `list_devices`, `capture_selected`, `release_selected`, `attachment_status`; persist VID:PID and serial when available, not mutable USB bus address alone.
 - `GuestPrinting`: `probe_ipp`, `list_queues`, `queue_status`, `submit_test_page`, `jobs`, `diagnostics`.
+- `GuestScanning`: `probe_escl`, `capabilities`, `scanner_status`, and endpoint
+  diagnostics. Scan image bytes flow directly between the eSCL service and the
+  requesting client; provider diagnostics never retain document content.
 - `WindowsPrinting`: `detect_ipp_support`, `register_owned_queue`, `list_owned_queues`, `remove_owned_queue`, `verify_driver`.
 - `Startup`: retained only to disable/verify absence of the legacy owned login task; M10 must never call `enable_login_start`.
-- LAN policy/discovery: verify one explicitly approved active default-route IPv4 interface and subnet, verify exact firewall rules, publish/unpublish the queue, and expose truthful status including the Windows network category.
+- LAN policy/discovery: verify one explicitly approved active default-route IPv4 interface and subnet, verify exact firewall rules, publish/unpublish print and scan services, and expose truthful status including the Windows network category.
 
 Avoid building a general plugin runtime. Interfaces exist to isolate vendor APIs and make fakes possible. Keep subprocess invocation centralized with argument-vector construction, no string-formatted shell commands, bounded timeouts, and captured stderr.
 
 ### Status model
 
-Store **component states separately** (hypervisor, guest boot, USB, CUPS, Windows queue, LAN sharing); derive an overall UI status. Report selected interface/address/IPP endpoint and whether DNS-SD is active without exposing secrets. Example: `NotConfigured`, `Provisioning`, `Starting`, `WaitingForUsb`, `Connecting`, `Ready`, `Degraded`, `Error`, `Stopping`. Distinguish an IPP job being **accepted**, **completed by CUPS**, and **physically printed**; software cannot infer the last without a hardware test or reliable device feedback.
+Store **component states separately** (hypervisor, guest boot, USB, CUPS,
+Windows queue, scanner, LAN sharing); derive an overall UI status. Report
+selected interface/address, IPP/eSCL endpoints and whether each DNS-SD service
+is active without exposing secrets. Example: `NotConfigured`, `Provisioning`,
+`Starting`, `WaitingForUsb`, `Connecting`, `Ready`, `Degraded`, `Error`,
+`Stopping`. Distinguish an IPP job being **accepted**, **completed by CUPS**,
+and **physically printed**; software cannot infer the last without a hardware
+test or reliable device feedback. Likewise, an eSCL response does not prove the
+captured image is correct until a person inspects it.
 
 ### Networking and security
 
 - Keep the existing loopback-only NAT forward `127.0.0.1:<chosen-port>` → guest `631` for the owned Windows queue.
+- Add a separately owned loopback eSCL forward to guest AirSane port `8090`.
+  The default reference host port is `8645`; refuse collisions rather than
+  changing it behind an already registered scanner.
 - While the app is running, add one separately marker-owned NAT rule bound to the IPv4 address of the explicitly approved active default-route Windows interface and the same stable port. The approved subnet must be a canonical directly attached local IPv4 CIDR.
-- Allow inbound TCP IPP only for the exact `VBoxHeadless.exe`, and inbound UDP 5353 only for the exact agent executable. Both rules must be constrained to `Profile=Private,Public`, the exact approved interface alias, and the exact approved remote subnet; never use `Any` or `LocalSubnet`. Scope mDNS to the same IPv4 interface and publish `_ipp._tcp.local.` only after USB and CUPS are ready.
-- A Public category is allowed only through that explicit interface/subnet exception; it does not authorize any other Public interface, subnet, port, or program. If approval is absent, the approved interface is inactive/not the default route, or its address leaves the approved subnet, stop DNS-SD and remove the owned LAN NAT rule while preserving local Windows printing. On explicit Exit, stop DNS-SD, gracefully stop the VM, remove the LAN forward, and exit the agent. Uninstall removes only exact marker-owned firewall rules.
+- Allow inbound TCP IPP/eSCL only for the exact `VBoxHeadless.exe`, and inbound
+  UDP 5353 only for the exact agent executable. Rules must be constrained to
+  `Profile=Private,Public`, the exact approved interface alias, exact approved
+  remote subnet and explicit ports; never use `Any` or `LocalSubnet`. Scope
+  mDNS to the same IPv4 interface. Publish `_ipp._tcp.local.` only after USB and
+  CUPS are ready, and `_uscan._tcp.local.` only after the SANE/eSCL capability
+  probe succeeds.
+- A Public category is allowed only through that explicit interface/subnet
+  exception; it does not authorize any other Public interface, subnet, port or
+  program. Scan sharing requires separate explicit approval for TCP 8645. If
+  approval is absent, the approved interface is inactive/not the default route,
+  or its address leaves the approved subnet, stop DNS-SD and remove the owned
+  LAN NAT rules while preserving loopback Windows printing/scanning. On
+  explicit Exit, stop DNS-SD, gracefully stop the VM, remove LAN forwards, and
+  exit the agent. Uninstall removes only exact marker-owned firewall rules.
 - If loopback-forwarded IPP fails for a protocol/URI reason, test a private host-only adapter with stable guest IP as the documented fallback. Keep the alternative behind `PrinterEndpoint`/network configuration rather than hardcoding it everywhere.
-- Keep the CUPS `--no-remote-admin --no-remote-any` baseline, then add one marker-delimited guest rule allowing only `/printers/PrintBridge_DCP_L2600D` through the scoped host forward. Keep `/`, `/admin`, SSH, and every other guest service remote-denied; never open inbound internet/Any-profile firewall rules.
+- Keep the CUPS `--no-remote-admin --no-remote-any` baseline, then add one
+  marker-delimited guest rule allowing only `/printers/PrintBridge_DCP_L2600D`
+  through the scoped host forward. AirSane may expose only its eSCL paths and
+  bounded web interface through the separate forward; disable guest Avahi
+  publication because host DNS-SD owns approved-interface scope. Keep CUPS `/`,
+  `/admin`, SSH, and every other guest service remote-denied; never open inbound
+  internet/Any-profile firewall rules.
 - Optional guest SSH management must bind only to Windows loopback, use per-install keys with restrictive ACLs, and never permit remote password login. Avoid retaining provisioning secrets.
 - Never allow a user-supplied printer name, URL, or USB descriptor to become an unescaped shell expression. Verify downloads by trusted source/checksum and minimize guest packages.
 
@@ -162,6 +213,8 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 | Windows protected printing policy incompatible | Printer registration or output blocked | M0: inspect current setting; document results; never silently disable system policy |
 | CUPS advertises internal guest URI | Windows cannot locate queue behind forwarded port | Test loopback `127.0.0.1` and advertised URI, then host-only network fallback |
 | Vendor driver requires i386/glibc/old filters | Tiny Linux distro cannot print | Identify package architecture/dependencies; pin suitable guest distro; keep driver installation modular |
+| Scanner backend cannot access the composite USB device | eSCL server exists but cannot acquire an image | M11: install the exact owner-supplied Brother SANE backend, prove `saned` can enumerate and scan, and retain a bounded browser fallback |
+| Unauthenticated LAN scan exposes a document | A trusted-LAN peer could start or receive a scan | Require separate exact subnet/port approval, advertise only while the app and scanner are ready, stream without retention, and disclose the trusted-LAN boundary |
 | Composite USB device switches host/guest ownership | Printing/scanning becomes unavailable on Windows while captured | Ask user before capture; identify whole device, persist safe filter, release on uninstall |
 | Port is already occupied | Queue becomes offline | Detect, allocate/reuse stable port, repair Windows queue if endpoint changes |
 | Host sleep, reboot, USB unplug | Stalled jobs/offline queue | Reconciler, retries, bounded startup, idempotent reattach, integration tests |
@@ -295,7 +348,7 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 
 **PASS:** The bounded physical end-to-end regression gate passes with evidence; prior applicable physical milestone gates remain valid; deferred stress checks are disclosed rather than claimed; no hidden background crashes/leaks or data loss appears in the required workload; status is truthful; polished UI and documented installer are usable by someone who has never seen VirtualBox.
 
-### M10 — On-demand trusted-LAN sharing (CURRENT PRODUCT CONTRACT)
+### M10 — On-demand trusted-LAN sharing
 
 **Implement:**
 
@@ -310,6 +363,52 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 **Physical gate (bounded):** With the active Windows interface and directly attached local subnet explicitly approved (the reference host is `Ethernet 3`, `192.168.100.0/24`, category Public) and one phone/computer on that same non-isolated LAN: open PrintBridge; confirm the device discovers `Brother via PrintBridge`; print one small page from that LAN device and confirm physical output; explicitly Exit; confirm the VM and agent stop and the LAN printer becomes unavailable. No M11 work or M10 commit before this physical result is recorded.
 
 **PASS:** `PASS: PHYSICAL` only after the bounded LAN print and explicit-exit checks above. Otherwise report `BLOCKED: REQUIRES HARDWARE` even if every software test passes.
+
+### M11 — Driverless scanning for local and trusted-LAN consumers (CURRENT PRODUCT CONTRACT)
+
+**Implement:**
+
+- Prove the exact Brother DCP-L2600D scan function through a SANE backend in
+  the accepted guest. The owner-local Brother scanner package must be obtained
+  from the official source, hash/version recorded, and never bundled until its
+  redistribution terms are reviewed. Enumeration must work as the unprivileged
+  scanner service account, not just as root.
+- Build and pin AirSane from its GPL-3.0 source, retain corresponding source and
+  license information, disable its guest-side mDNS, and expose its eSCL and
+  bounded web scan interface only through separately marker-owned loopback and
+  approved-LAN forwards. Never expose `saned`, SSH, CUPS administration or an
+  arbitrary guest HTTP service.
+- Add protocol v7 scanner status and endpoints, a `GuestScanning` provider,
+  exact VirtualBox NAT ownership/collision rules, separately approved TCP 8645
+  Windows Firewall scope, and `_uscan._tcp.local.` advertisement populated from
+  the live eSCL capabilities. Exit, lease loss, repair and uninstall must clean
+  up only PrintBridge-owned scan resources.
+- Add a desktop Scan screen with readiness, capability and privacy guidance,
+  plus an **Open scanner** action using the loopback web endpoint. Add matching
+  CLI status/URL diagnostics. Windows uses its inbox eSCL support; Android uses
+  the separate Mopria Scan app. Document macOS Image Capture and Linux
+  `sane-airscan` interoperability without claiming untested hardware clients.
+- Serialize access honestly: a scan may temporarily make printing or another
+  scan wait. Never claim image correctness from HTTP status alone, retain scan
+  content in diagnostics, or expose filenames/document bytes in logs.
+
+**Software gate:** Unit/provider/frontend/PowerShell tests pass; fake eSCL
+capabilities drive UI and DNS-SD; unsafe XML, oversized responses, port/NAT
+collisions and unapproved/mismatched LAN scope fail closed; installer/repair and
+uninstall preserve unrelated VMs, firewall rules, scanners and user files.
+
+**Physical gate (bounded, no paper consumed):** With one document on the
+flatbed, prove `scanimage -L` and a small acquisition as the guest service user;
+inspect one image from the PrintBridge browser path; scan once in Windows Scan;
+scan once on the approved-subnet Android device using Mopria Scan; confirm each
+image is the intended document and legible. Explicit Exit must make the eSCL
+and web endpoints unavailable and power off the owned VM. macOS/Linux native
+client checks may remain `NOT TESTED` when those clients are unavailable because
+the browser fallback is part of the required cross-platform path.
+
+**PASS:** `PASS: PHYSICAL` only after the guest, browser, Windows and Android
+checks plus exact Exit cleanup pass. Otherwise report `BLOCKED: REQUIRES
+HARDWARE`; do not start M12 or commit M11.
 
 ## 5. Proposed performance targets (measure, do not assume)
 
@@ -343,12 +442,26 @@ Store **component states separately** (hypervisor, guest boot, USB, CUPS, Window
 | Reconnect after unplug | n/a | documented spike | automatic or actionable recovery |
 | No Windows login autostart/background VM | n/a | n/a | yes |
 | Explicitly approved same-LAN phone/device discovery and print | n/a | n/a | physically yes |
+| Guest SANE scanner enumeration and acquisition | n/a | n/a | physically yes |
+| Windows inbox eSCL discovery and scan | n/a | n/a | physically yes |
+| Android Mopria Scan discovery and scan | n/a | n/a | physically yes |
+| Cross-platform browser scan fallback | n/a | n/a | physically yes |
 | Missing/mismatched LAN approval refusal | n/a | n/a | software + manual yes |
 | GUI setup/status/diagnostics | n/a | n/a | yes |
 | Clean uninstall without collateral deletion | n/a | n/a | yes |
 | Resource budget and soak test | n/a | baseline | measured/passed |
 
-**Definition of done:** A nondeveloper on the supported Windows host can install/configure and open PrintBridge, hide its window to the tray, select `Brother via PrintBridge` in Windows or discover it from a phone on the explicitly approved same LAN, and reliably print a real page. Explicit Exit stops the VM/agent and sharing. The project reports status honestly, refuses exposure beyond the approved interface/subnet, recovers from expected disconnects, does not start on login, and uninstalls cleanly. Claims about the printer model and compatibility are limited to actually tested hardware.
+**Definition of done:** A nondeveloper on the supported Windows host can
+install/configure and open PrintBridge, hide its window to the tray, select
+`Brother via PrintBridge` in Windows or discover it from a phone on the
+explicitly approved same LAN, and reliably print a real page. The same selected
+multifunction device is available for a real scan through Windows inbox eSCL,
+Android Mopria Scan and the browser fallback while the app is running. Explicit
+Exit stops the VM/agent and all print/scan sharing. The project reports status
+honestly, refuses exposure beyond the approved interface/subnet, recovers from
+expected disconnects, does not start on login, and uninstalls cleanly. Claims
+about the printer model and compatibility are limited to actually tested
+hardware.
 
 ## 8. Human-in-the-loop reporting format
 
@@ -375,6 +488,10 @@ Recheck current documentation against the versions installed at implementation t
 - Microsoft `Add-Printer` and `-IppURL`: https://learn.microsoft.com/en-us/powershell/module/printmanagement/add-printer
 - Microsoft IPP Class Driver: https://learn.microsoft.com/en-us/universal-print/fundamentals/universal-print-connector-with-ipp
 - Microsoft Windows Protected Print Mode: https://learn.microsoft.com/en-us/windows/modern-print/windows-protected-print-mode/windows-protected-print-mode
+- Microsoft Windows Ready Print (IPP and eSCL): https://learn.microsoft.com/en-us/windows/modern-print/windows-ready-print
+- Mopria print and scan support: https://mopria.org/faq
+- AirSane eSCL server: https://github.com/SimulPiscator/AirSane
+- Brother DCP-L2600D Linux downloads: https://support.brother.com/g/b/downloadtop.aspx?prod=dcpl2600d_eu_as
 - Oracle VirtualBox USB capture: https://docs.oracle.com/en/virtualization/virtualbox/7.1/user/BasicConcepts.html
 - Oracle VirtualBox networking: https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/networkingdetails.html
 - Microsoft `New-NetFirewallRule`: https://learn.microsoft.com/powershell/module/netsecurity/new-netfirewallrule

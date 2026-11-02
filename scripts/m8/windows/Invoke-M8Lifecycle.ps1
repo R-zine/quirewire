@@ -10,7 +10,7 @@ param(
 
     [string]$DataRoot = (Join-Path $env:LOCALAPPDATA 'PrintBridge'),
     [string]$QueueResultPath,
-    [string]$VBoxManage = (Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxManage.exe')
+    [string]$VBoxManage = ''
 )
 
 Set-StrictMode -Version Latest
@@ -29,7 +29,16 @@ $printerScript = Join-Path $InstallRoot 'scripts\m5\windows\Invoke-M5WindowsPrin
 $lanScript = Join-Path $InstallRoot 'scripts\m10\windows\Invoke-M10LanSharing.ps1'
 $lanApprovalScript = Join-Path $InstallRoot 'scripts\m10\windows\Set-M10LanApproval.ps1'
 $lanIppProbe = Join-Path $InstallRoot 'scripts\m10\windows\Test-M10LanIpp.ps1'
-$vboxHeadless = Join-Path $env:ProgramFiles 'Oracle\VirtualBox\VBoxHeadless.exe'
+$scanProbe = Join-Path $InstallRoot 'scripts\m11\windows\Test-M11Escl.ps1'
+$scanApprovalScript = Join-Path $InstallRoot 'scripts\m11\windows\Set-M11ScanApproval.ps1'
+$nativeProgramFiles = [Environment]::GetEnvironmentVariable('ProgramW6432')
+if ([string]::IsNullOrWhiteSpace($nativeProgramFiles)) {
+    $nativeProgramFiles = [Environment]::GetEnvironmentVariable('ProgramFiles')
+}
+if ([string]::IsNullOrWhiteSpace($VBoxManage)) {
+    $VBoxManage = Join-Path $nativeProgramFiles 'Oracle\VirtualBox\VBoxManage.exe'
+}
+$vboxHeadless = Join-Path $nativeProgramFiles 'Oracle\VirtualBox\VBoxHeadless.exe'
 $ownerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 
 function Get-FullPath([string]$Path) {
@@ -51,6 +60,8 @@ $printerScript = Join-Path $InstallRoot 'scripts\m5\windows\Invoke-M5WindowsPrin
 $lanScript = Join-Path $InstallRoot 'scripts\m10\windows\Invoke-M10LanSharing.ps1'
 $lanApprovalScript = Join-Path $InstallRoot 'scripts\m10\windows\Set-M10LanApproval.ps1'
 $lanIppProbe = Join-Path $InstallRoot 'scripts\m10\windows\Test-M10LanIpp.ps1'
+$scanProbe = Join-Path $InstallRoot 'scripts\m11\windows\Test-M11Escl.ps1'
+$scanApprovalScript = Join-Path $InstallRoot 'scripts\m11\windows\Set-M11ScanApproval.ps1'
 
 function Assert-ChildPath([string]$Candidate, [string]$Parent) {
     $candidatePath = Get-FullPath $Candidate
@@ -74,7 +85,7 @@ function Read-Config {
     }
     $required = @('schema', 'owner_sid', 'vm_uuid', 'vm_marker', 'vm_schema', 'usb_vendor_id',
         'usb_product_id', 'usb_serial', 'printer_name', 'endpoint_port', 'guest_queue')
-    $optional = @('lan_interface_alias', 'lan_subnet')
+    $optional = @('scanner_port', 'lan_interface_alias', 'lan_subnet', 'lan_scan_port')
     $unknown = @($values.Keys | Where-Object { $_ -notin ($required + $optional) })
     if (@($required | Where-Object { -not $values.Contains($_) }).Count -ne 0 -or
         $unknown.Count -ne 0 -or
@@ -90,12 +101,23 @@ function Read-Config {
         $values.guest_queue -notmatch '^[A-Za-z0-9._-]+$') {
         throw 'The PrintBridge configuration contains an unsupported managed identity.'
     }
+    if (-not $values.Contains('scanner_port')) { $values['scanner_port'] = '8645' }
+    if ($values.scanner_port -notmatch '^[0-9]{1,5}$' -or
+        [int]$values.scanner_port -lt 1 -or [int]$values.scanner_port -gt 65535 -or
+        [int]$values.scanner_port -eq [int]$values.endpoint_port) {
+        throw 'The PrintBridge scanner port is invalid or conflicts with the IPP port.'
+    }
     if ($values.Contains('lan_interface_alias')) {
         if ([string]::IsNullOrWhiteSpace($values.lan_interface_alias) -or
             $values.lan_interface_alias.IndexOfAny([char[]]"`r`n") -ge 0 -or
             $values.lan_subnet -notmatch '^[0-9]{1,3}(?:\.[0-9]{1,3}){3}/(?:[89]|[12][0-9]|30)$') {
             throw 'The PrintBridge LAN approval is malformed.'
         }
+    }
+    if ($values.Contains('lan_scan_port') -and
+        (-not $values.Contains('lan_interface_alias') -or
+        $values.lan_scan_port -ne $values.scanner_port)) {
+        throw 'The LAN scanner port requires separate approval and must match scanner_port.'
     }
     [pscustomobject]$values
 }
@@ -184,6 +206,50 @@ function Test-IsAdministrator {
     $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Remove-LegacyOwnedQueues {
+    $getPrinter = Get-Command Get-Printer -ErrorAction SilentlyContinue
+    $removePrinter = Get-Command Remove-Printer -ErrorAction SilentlyContinue
+    if ($null -eq $getPrinter -or $null -eq $removePrinter) {
+        throw 'Windows PrintManagement cmdlets are unavailable; legacy queue ownership cannot be verified.'
+    }
+
+    $legacyOwnedQueues = @(
+        [pscustomobject]@{
+            Name = 'Brother via PrintBridge POC'
+            Comment = 'PrintBridge M0 feasibility POC - owned by Manage-M0IppPrinter.ps1'
+        },
+        [pscustomobject]@{
+            Name = 'Brother via PrintBridge M1'
+            Comment = 'PrintBridge M1 manual spike - owned by Manage-M1IppPrinter.ps1'
+        }
+    )
+    $removed = @()
+    foreach ($legacy in $legacyOwnedQueues) {
+        $queue = Get-Printer -Name $legacy.Name -ErrorAction SilentlyContinue
+        if ($null -eq $queue) { continue }
+
+        # These immutable names and comments were written only by the M0/M1
+        # feasibility scripts. Preserve every collision or modified queue, and
+        # never disturb a default printer, driver, or WSD port.
+        if ($queue.Comment -ne $legacy.Comment -or
+            $queue.DriverName -ne 'Microsoft IPP Class Driver' -or
+            $queue.PortName -notlike 'WSD-*') {
+            continue
+        }
+        $escapedName = $legacy.Name.Replace("'", "''")
+        $cimPrinter = Get-CimInstance -ClassName Win32_Printer `
+            -Filter "Name='$escapedName'" -ErrorAction SilentlyContinue
+        if ($null -ne $cimPrinter -and [bool]$cimPrinter.Default) { continue }
+
+        Remove-Printer -Name $legacy.Name -ErrorAction Stop
+        if ($null -ne (Get-Printer -Name $legacy.Name -ErrorAction SilentlyContinue)) {
+            throw "The exact legacy PrintBridge queue '$($legacy.Name)' remained after removal."
+        }
+        $removed += $legacy.Name
+    }
+    @($removed)
+}
+
 function Invoke-PrinterProvider([string]$ProviderAction, [object]$Config) {
     if (-not (Test-Path -LiteralPath $printerScript -PathType Leaf)) {
         throw 'The packaged Windows printing provider is missing; queue ownership cannot be proved.'
@@ -214,6 +280,9 @@ function Invoke-LanProvider([string]$ProviderAction, [object]$Config) {
         '-IppPort', $Config.endpoint_port, '-AgentExecutable', $agentPath,
         '-VBoxHeadlessExecutable', $vboxHeadless
     )
+    if ('lan_scan_port' -in @($Config.PSObject.Properties.Name)) {
+        $providerArguments += @('-ScanPort', $Config.lan_scan_port)
+    }
     if (Test-LanApproved $Config) {
         $providerArguments += @(
             '-ApprovedInterfaceAlias', $Config.lan_interface_alias,
@@ -395,6 +464,7 @@ function Remove-OwnedData([object]$Manifest) {
     }
 }
 
+try {
 switch ($Action) {
     'InstallLanElevated' {
         if (-not (Test-IsAdministrator)) { throw 'The scoped LAN helper requires elevation.' }
@@ -444,7 +514,7 @@ switch ($Action) {
     }
     'Install' {
         foreach ($required in @($agentPath, $cliPath, $startupScript, $printerScript,
-                $lanScript, $lanApprovalScript, $lanIppProbe)) {
+                $lanScript, $lanApprovalScript, $lanIppProbe, $scanProbe, $scanApprovalScript)) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
                 throw "The installer did not place required resource: $required"
             }
@@ -454,10 +524,12 @@ switch ($Action) {
         if ($config) {
             $null = Disable-ExistingOwnedTask
             Invoke-OwnedQueue -QueueAction Install -Config $config
+            $legacyQueuesRemoved = @(Remove-LegacyOwnedQueues)
             if (Test-LanApproved $config) {
                 Invoke-ElevatedLanOperation -ElevatedAction InstallLanElevated
             }
         }
+        else { $legacyQueuesRemoved = @() }
         $manifest = New-InstallationManifest -Config $config -Previous $previous
         Write-Manifest $manifest
         [pscustomobject]@{
@@ -467,6 +539,7 @@ switch ($Action) {
             persistent_agent_elevated = $false
             network_required_for_printbridge = $false
             owner_appliance_required = -not [bool]$config
+            legacy_queues_removed = @($legacyQueuesRemoved)
         } | ConvertTo-Json
     }
     'Repair' {
@@ -475,11 +548,17 @@ switch ($Action) {
         if (-not $config) { throw 'Repair needs an owner-created appliance configuration; see the packaged install guide.' }
         $null = Disable-ExistingOwnedTask
         Invoke-OwnedQueue -QueueAction Install -Config $config
+        $legacyQueuesRemoved = @(Remove-LegacyOwnedQueues)
         if (Test-LanApproved $config) {
             Invoke-ElevatedLanOperation -ElevatedAction InstallLanElevated
         }
         Write-Manifest (New-InstallationManifest -Config $config -Previous $manifest)
-        [pscustomobject]@{ schema = $schema; action = $Action; repaired = $true } | ConvertTo-Json
+        [pscustomobject]@{
+            schema = $schema
+            action = $Action
+            repaired = $true
+            legacy_queues_removed = @($legacyQueuesRemoved)
+        } | ConvertTo-Json
     }
     'Status' {
         $manifest = Read-Manifest
@@ -505,6 +584,7 @@ switch ($Action) {
             Invoke-OwnedQueue -QueueAction Remove -Config $config
             Invoke-ElevatedLanOperation -ElevatedAction RemoveLanElevated
         }
+        $legacyQueuesRemoved = @(Remove-LegacyOwnedQueues)
         if ($manifest.vm) { Remove-InstallationOwnedVm $manifest.vm }
         Remove-OwnedData $manifest
         [pscustomobject]@{
@@ -512,8 +592,26 @@ switch ($Action) {
             action = $Action
             startup_task_removed = $true
             owned_queue_removed = [bool]$config
+            legacy_queues_removed = @($legacyQueuesRemoved)
             installation_owned_vm_removed = [bool]($manifest.vm -and $manifest.vm.disposition -eq 'installation-owned')
             unrelated_resources_preserved = $true
         } | ConvertTo-Json
     }
+}
+}
+catch {
+    $lifecycleError = $_
+    try {
+        $logDirectory = Join-Path $DataRoot 'logs'
+        New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+        $record = '{0} action={1} error={2}' -f [DateTime]::UtcNow.ToString('o'), $Action,
+            ($lifecycleError.Exception.Message -replace '[\r\n]+', ' ')
+        Add-Content -LiteralPath (Join-Path $logDirectory 'installer-lifecycle-errors.log') `
+            -Value $record -Encoding utf8
+    }
+    catch {
+        # Preserve the original lifecycle exception even if owner-local logging fails.
+    }
+    Write-Error -ErrorRecord $lifecycleError
+    exit 1
 }

@@ -47,7 +47,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 In Setup, discover USB devices, select only the recorded printer, read the whole
 device ownership notice, check consent, and choose **Confirm & enable bridge**.
 The agent then reconciles the guest, USB, CUPS, Microsoft IPP queue, and scoped
-LAN sharing without importing setup code into the UI. LAN access is off until
+eSCL service, and scoped LAN sharing without importing setup code into the UI.
+LAN access is off until
 the owner explicitly approves one current interface alias and its directly
 attached local IPv4 subnet. For the reference host:
 
@@ -63,6 +64,20 @@ Run Repair after changing approval. The exact firewall exception covers the
 approved interface/subnet even when Windows categorizes it Public; it does not
 authorize another adapter, subnet, port, or program. Use `-Action Remove` to
 withdraw LAN approval, then run Repair or explicitly Exit.
+
+LAN scanning requires a second, separate approval because it permits devices on
+the trusted subnet to acquire documents. After LAN printing is approved:
+
+```powershell
+$root = Join-Path $env:LOCALAPPDATA 'PrintBridge'
+& "$root\scripts\m11\windows\Set-M11ScanApproval.ps1" `
+  -Action Approve -ConfigPath "$root\m6.conf"
+& "$root\scripts\m8\windows\Invoke-M8Lifecycle.ps1" `
+  -Action Repair -InstallRoot $root
+```
+
+This adds only the configured TCP 8645 rule to the same exact interface/subnet.
+Use `-Action Remove` and Repair to withdraw scan access while preserving print.
 
 ## Existing M6/M7 installation or upgrade
 

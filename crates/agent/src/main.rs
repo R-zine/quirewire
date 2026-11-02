@@ -21,17 +21,47 @@ async fn main() {
         {
             diagnose_lan(address, port, output)
         }
+        [command, address, port, flag, output]
+            if command == "diagnose-scan" && flag == "--output" =>
+        {
+            diagnose_scan(address, port, output)
+        }
         [command] if command == "help" || command == "--help" || command == "-h" => {
             println!(
-                "PrintBridge on-demand agent\nUsage:\n  printbridge-agent run --config <m6.conf> [--on-demand]\n  printbridge-agent diagnose-lan <IPv4> <port> --output <path>"
+                "PrintBridge on-demand agent\nUsage:\n  printbridge-agent run --config <m6.conf> [--on-demand]\n  printbridge-agent diagnose-lan <IPv4> <port> --output <path>\n  printbridge-agent diagnose-scan <IPv4> <port> --output <path>"
             );
             Ok(())
         }
-        _ => Err("Usage: printbridge-agent run --config <m6.conf> [--on-demand] | diagnose-lan <IPv4> <port> --output <path>".into()),
+        _ => Err("Usage: printbridge-agent run --config <m6.conf> [--on-demand] | diagnose-lan <IPv4> <port> --output <path> | diagnose-scan <IPv4> <port> --output <path>".into()),
     };
     if let Err(error) = result {
         eprintln!("printbridge-agent: {error}");
         std::process::exit(1);
+    }
+}
+
+fn diagnose_scan(
+    address: &str,
+    port: &str,
+    output: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let address = address.parse::<Ipv4Addr>()?;
+    let port = port.parse::<u16>()?;
+    let result = printbridge_provider_lan::browse_live_scan_advertisement(
+        "Brother via PrintBridge Scanner",
+        address,
+        port,
+        Duration::from_secs(15),
+    );
+    match result {
+        Ok(detail) => {
+            std::fs::write(output, format!("ok=true\n{detail}\n"))?;
+            Ok(())
+        }
+        Err(error) => {
+            std::fs::write(output, format!("ok=false\nerror={error}\n"))?;
+            Err(error.into())
+        }
     }
 }
 

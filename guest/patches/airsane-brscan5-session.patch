@@ -1,0 +1,26 @@
+diff --git a/server/server.cpp b/server/server.cpp
+index 1e390af..c109ad2 100644
+--- a/server/server.cpp
++++ b/server/server.cpp
+@@ -341,7 +341,12 @@ Server::run()
+     if (mRandompaths)
+       pathPrefix += Uuid::Random().toString() + "/";
+ 
+-    sanecpp::init saneinit; // init/deinit after every iteration of the do/while loop
++    // Keep one SANE initialization while discovering and probing devices, but
++    // release it before accepting scan jobs. Brother's brscan5 backend rejects
++    // a later sane_open() unless the completed startup session has first ended
++    // with sane_exit() (upstream AirSane issue #132).
++    {
++    sanecpp::init saneinit;
+ 
+     auto scanners = sanecpp::enumerate_devices(mLocalonly);
+     int scannerCount = 0;
+@@ -395,6 +400,7 @@ Server::run()
+             mScanners.push_back(ScannerEntry({ pScanner, pService }));
+       }
+     }
++    }
+ 
+     ::clock_gettime(CLOCK_MONOTONIC, &t);
+     float t1 = 1.0 * t.tv_sec + 1e-9 * t.tv_nsec;

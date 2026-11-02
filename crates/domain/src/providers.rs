@@ -2,8 +2,8 @@ use std::path::Path;
 
 use crate::{
     BridgeError, ComponentStatus, DependencyInfo, DiagnosticEntry, OwnedVm, PrintJob, PrintQueue,
-    PrinterEndpoint, StartupRegistration, UsbDevice, UsbIdentity, WindowsPrintSubmission,
-    WindowsQueueStatus,
+    PrinterEndpoint, ScannerCapabilities, ScannerEndpoint, StartupRegistration, UsbDevice,
+    UsbIdentity, WindowsPrintSubmission, WindowsQueueStatus,
 };
 
 pub trait Hypervisor {
@@ -51,6 +51,10 @@ pub trait GuestPrinting {
     fn submit_test_page(&mut self, queue: &str) -> Result<PrintJob, BridgeError>;
     fn jobs(&self, queue: &str) -> Result<Vec<PrintJob>, BridgeError>;
     fn diagnostics(&self) -> Result<Vec<DiagnosticEntry>, BridgeError>;
+}
+
+pub trait GuestScanning {
+    fn probe_escl(&self, endpoint: &ScannerEndpoint) -> Result<ScannerCapabilities, BridgeError>;
 }
 
 pub trait WindowsPrinting {

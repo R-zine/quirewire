@@ -1,9 +1,7 @@
 # Packaging and redistribution boundary
 
 This is an engineering inventory, not legal advice. It was last reviewed on
-2026-10-30 and must be reviewed again before any public release. M9 adds only
-repository PowerShell validation tools and documentation; it adds no runtime or
-redistributed third-party binary.
+2026-10-31 and must be reviewed again before any public release.
 
 | Component | M8 treatment | Reason / source |
 |---|---|---|
@@ -14,13 +12,14 @@ redistributed third-party binary.
 | Debian base appliance inputs | Buildable from pinned official inputs; no OVA committed | Debian `main` packages are redistributable under their individual free-software licenses, but a public binary appliance still needs a complete corresponding notice/source review. [Debian license information](https://www.debian.org/legal/licenses/) |
 | CUPS and distro packages | Built into owner-local/base appliance, subject to package notices | Package license/copyright files remain the source of truth. No separate binary is copied into the Windows installer. |
 | Brother DCP-L2600D driver and legacy USB patch | **Owner-local only; never bundled** | The repository has hashes and official download pages but no verified grant allowing PrintBridge to redistribute these vendor binaries. The owner downloads and accepts Brother's terms directly. |
+| AirSane | Built from pinned source plus a hash-pinned compatibility patch inside the owner-local guest; source/notice obligations apply | AirSane is GPL-3.0-only. PrintBridge records the exact source commit, archive hash, patch hash, and upstream issue. Any distributed guest binary would require the complete corresponding patched source and notice review. The current Windows installer contains provisioning source, not an AirSane binary. [AirSane source](https://github.com/SimulPiscator/AirSane), [brscan5 issue #132](https://github.com/SimulPiscator/AirSane/issues/132) |
 | Configured Brother appliance | **Owner-local only; never bundled** | It contains the Brother binaries above. `*.ova`, `*.vdi`, vendor packages, keys, and serials remain ignored artifacts. |
 | SumatraPDF M9 test tool | Owner-local test artifact only; never bundled | The reference host uses the official portable, Authenticode-valid executable only because Chrome exposes no unattended explicit-printer verb. Re-review its GPL terms/source before any different use. [SumatraPDF](https://www.sumatrapdfreader.org/) |
 
 The M8 setup executable therefore contains only PrintBridge executables,
 PowerShell lifecycle/provider scripts, guest build source, manifests, and
 documentation. It contains no VirtualBox installer, Extension Pack, Debian ISO,
-Brother package, configured OVA, SSH private key, or USB serial.
+Brother print/scanner package, configured OVA, SSH private key, or USB serial.
 
 ## Network disclosure
 

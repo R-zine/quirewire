@@ -25,6 +25,7 @@ export interface AgentStatus {
     usb: ComponentStatus;
     cups: ComponentStatus;
     windows_queue: ComponentStatus;
+    scanner: ComponentStatus;
     lan: ComponentStatus;
   };
   startup: {
@@ -39,6 +40,17 @@ export interface AgentStatus {
     address: string | null;
     endpoint: string | null;
     service_instance: string | null;
+  };
+  scanner: {
+    available: boolean;
+    loopback_url: string;
+    lan_url: string | null;
+    service_instance: string | null;
+    make_model: string | null;
+    sources: string[];
+    color_modes: string[];
+    document_formats: string[];
+    resolutions_dpi: number[];
   };
 }
 
@@ -107,5 +119,5 @@ export class ClientError extends Error implements ClientErrorShape {
   }
 }
 
-export type ScreenId = "dashboard" | "setup" | "activity" | "diagnostics" | "settings";
+export type ScreenId = "dashboard" | "setup" | "activity" | "scan" | "diagnostics" | "settings";
 export type ThemePreference = "system" | "light" | "dark";

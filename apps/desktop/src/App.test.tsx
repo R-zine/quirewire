@@ -13,7 +13,7 @@ describe("PrintBridge desktop flows", () => {
   it("renders real component-level status from the client", async () => {
     renderApp();
     expect(await screen.findByRole("heading", { name: "Ready to print" })).toBeTruthy();
-    for (const name of ["VirtualBox", "Linux guest", "USB printer", "CUPS", "Windows queue", "Local network"]) {
+    for (const name of ["VirtualBox", "Linux guest", "USB printer", "CUPS", "Windows queue", "eSCL scanner", "Local network"]) {
       expect(screen.getByRole("heading", { name })).toBeTruthy();
     }
     expect(screen.getByText("Brother via PrintBridge is available to Windows and trusted local-network devices.")).toBeTruthy();
@@ -51,13 +51,28 @@ describe("PrintBridge desktop flows", () => {
     expect(client.calls).toContain("testPrint");
   });
 
+  it("shows live scanner capabilities and opens the fixed local scanner", async () => {
+    const user = userEvent.setup();
+    const client = new FakePrintBridgeClient();
+    renderApp(client);
+    await screen.findByRole("heading", { name: "Ready to print" });
+    await user.click(screen.getByRole("button", { name: /^Scan/ }));
+    expect(await screen.findByRole("heading", { name: "Scan from this PC" })).toBeTruthy();
+    expect(screen.getByText("http://127.0.0.1:8645/")).toBeTruthy();
+    expect(screen.getByText(/300 dpi/)).toBeTruthy();
+    expect(screen.getByText(/IPv4 address 192\.168\.1\.20/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Open scanner" }));
+    await waitFor(() => expect(client.calls).toContain("openScanner"));
+    expect((await screen.findAllByText("Scanner opened in your default browser.")).length).toBeGreaterThan(0);
+  });
+
   it("runs repair and exports redacted diagnostics", async () => {
     const user = userEvent.setup();
     const client = new FakePrintBridgeClient();
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Diagnostics/ }));
-    await screen.findByText(/Protocol v6/);
+    await screen.findByText(/Protocol v7/);
     await user.click(screen.getByRole("button", { name: "Run safe repair" }));
     await waitFor(() => expect(client.calls).toContain("repair"));
     await user.click(screen.getByRole("button", { name: "Export report" }));
@@ -82,7 +97,7 @@ describe("PrintBridge desktop flows", () => {
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     await user.click(screen.getByRole("button", { name: /^Settings/ }));
-    expect(screen.getByRole("button", { name: "Stop printing engine" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop engine" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Exit PrintBridge" }));
     expect(client.calls).toContain("exitPrintBridge");
     expect(client.calls).not.toContain("stop");
@@ -133,7 +148,7 @@ describe("PrintBridge desktop flows", () => {
     renderApp(client);
     await screen.findByRole("heading", { name: "Ready to print" });
     fireEvent.click(screen.getByRole("button", { name: /^Settings/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Stop printing engine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop engine" }));
     expect(client.calls).not.toContain("stop");
   });
 });

@@ -4,6 +4,11 @@ mod runtime;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+use std::process::Command as ProcessCommand;
+
 use client::{AgentClient, DesktopError};
 use printbridge_ipc::{
     AgentStatus, Command, DeviceSummary, Diagnostics, OperationResult, TestPrintResult,
@@ -73,6 +78,58 @@ async fn agent_get_diagnostics(
 #[tauri::command]
 async fn agent_repair(client: State<'_, AgentClient>) -> Result<OperationResult, DesktopError> {
     client.inner().clone().operation(Command::Repair).await
+}
+
+#[tauri::command]
+async fn open_scanner(client: State<'_, AgentClient>) -> Result<(), DesktopError> {
+    let status = client.inner().clone().status().await?;
+    if !status.scanner.available || !valid_scanner_url(&status.scanner.loopback_url) {
+        return Err(DesktopError {
+            code: "scanner_unavailable".into(),
+            message: "The local eSCL scanner is not ready.".into(),
+            action: Some("Power on and connect the selected USB device, then run Repair.".into()),
+            retryable: true,
+        });
+    }
+    open_scanner_url(&status.scanner.loopback_url)
+}
+
+fn valid_scanner_url(value: &str) -> bool {
+    value
+        .strip_prefix("http://127.0.0.1:")
+        .and_then(|value| value.strip_suffix('/'))
+        .and_then(|port| port.parse::<u16>().ok())
+        .is_some_and(|port| port != 0)
+}
+
+fn open_scanner_url(url: &str) -> Result<(), DesktopError> {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        ProcessCommand::new("explorer.exe")
+            .arg(url)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map(drop)
+            .map_err(scanner_open_error)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err(scanner_open_error(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "desktop scanner opening is supported only on Windows",
+        )))
+    }
+}
+
+fn scanner_open_error(error: std::io::Error) -> DesktopError {
+    DesktopError {
+        code: "scanner_open_failed".into(),
+        message: format!("Cannot open the scanner page: {error}"),
+        action: Some("Open the Scan screen and try again.".into()),
+        retryable: true,
+    }
 }
 
 #[tauri::command]
@@ -180,7 +237,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("printbridge-tray")
         .icon(app.default_window_icon().expect("desktop icon").clone())
-        .tooltip("PrintBridge — LAN printing is available while this app is running")
+        .tooltip("PrintBridge — LAN printing and scanning are available while this app is running")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -261,9 +318,27 @@ pub fn run() {
             agent_test_print,
             agent_get_diagnostics,
             agent_repair,
+            open_scanner,
             export_diagnostics,
             exit_printbridge,
         ])
         .run(tauri::generate_context!())
         .expect("PrintBridge desktop runtime failed");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn scanner_launcher_accepts_only_fixed_loopback_http_shape() {
+        assert!(super::valid_scanner_url("http://127.0.0.1:8645/"));
+        for unsafe_url in [
+            "https://127.0.0.1:8645/",
+            "http://192.168.1.20:8645/",
+            "http://127.0.0.1:8645/eSCL/ScannerCapabilities",
+            "http://127.0.0.1:0/",
+            "http://127.0.0.1:8645/?command=run",
+        ] {
+            assert!(!super::valid_scanner_url(unsafe_url));
+        }
+    }
 }

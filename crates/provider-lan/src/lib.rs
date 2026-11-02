@@ -13,6 +13,7 @@ use printbridge_domain::BridgeError;
 
 pub const IPP_SERVICE_TYPE: &str = "_ipp._tcp.local.";
 pub const AIRPRINT_SERVICE_TYPE: &str = "_universal._sub._ipp._tcp.local.";
+pub const AIRSCAN_SERVICE_TYPE: &str = "_uscan._tcp.local.";
 const TXT_VALUE_MAX: usize = 251;
 const PDL_PRIORITY: [&str; 7] = [
     "image/urf",
@@ -31,12 +32,23 @@ pub fn browse_live_advertisement(
     timeout: Duration,
 ) -> Result<String, BridgeError> {
     let deadline = Instant::now() + timeout;
-    let ipp_bytes = legacy_query(IPP_SERVICE_TYPE, instance_name, expected_address, deadline)?;
-    let airprint_bytes = legacy_query(
-        AIRPRINT_SERVICE_TYPE,
-        instance_name,
+    let printer_markers: [&[u8]; 4] = [
+        instance_name.as_bytes(),
+        b"printers/PrintBridge_DCP_L2600D",
+        b"pdl=",
+        b"URF=",
+    ];
+    let ipp_bytes = legacy_query(
+        IPP_SERVICE_TYPE,
         expected_address,
         deadline,
+        &printer_markers,
+    )?;
+    let airprint_bytes = legacy_query(
+        AIRPRINT_SERVICE_TYPE,
+        expected_address,
+        deadline,
+        &printer_markers,
     )?;
     Ok(format!(
         "resolved={} address={} port={} ipp_response_bytes={} airprint_response_bytes={}",
@@ -44,11 +56,36 @@ pub fn browse_live_advertisement(
     ))
 }
 
-fn legacy_query(
-    service_type: &str,
+pub fn browse_live_scan_advertisement(
     instance_name: &str,
     expected_address: Ipv4Addr,
+    expected_port: u16,
+    timeout: Duration,
+) -> Result<String, BridgeError> {
+    let deadline = Instant::now() + timeout;
+    let markers: [&[u8]; 9] = [
+        instance_name.as_bytes(),
+        b"eSCL",
+        b"pdl=",
+        b"vers=2.0",
+        b"cs=",
+        b"is=",
+        b"duplex=",
+        b"adminurl=",
+        b"uuid=",
+    ];
+    let response_bytes = legacy_query(AIRSCAN_SERVICE_TYPE, expected_address, deadline, &markers)?;
+    Ok(format!(
+        "resolved={} address={} port={} airscan_compatibility=airsane-v2 airscan_response_bytes={}",
+        instance_name, expected_address, expected_port, response_bytes
+    ))
+}
+
+fn legacy_query(
+    service_type: &str,
+    expected_address: Ipv4Addr,
     deadline: Instant,
+    expected_markers: &[&[u8]],
 ) -> Result<usize, BridgeError> {
     let socket = UdpSocket::bind(SocketAddrV4::new(expected_address, 0))
         .map_err(|error| lan_error(format!("cannot bind mDNS diagnostic socket: {error}")))?;
@@ -66,12 +103,6 @@ fn legacy_query(
         )
         .map_err(|error| lan_error(format!("cannot send mDNS diagnostic query: {error}")))?;
 
-    let expected_markers = [
-        instance_name.as_bytes(),
-        b"printers/PrintBridge_DCP_L2600D",
-        b"pdl=",
-        b"URF=",
-    ];
     let mut response = [0_u8; 4096];
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
@@ -190,6 +221,131 @@ impl LanAdvertisement {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanAdvertisement {
+    pub instance_name: String,
+    pub hostname: String,
+    pub address: Ipv4Addr,
+    pub port: u16,
+    pub make_model: String,
+    pub formats: Vec<String>,
+    pub sources: Vec<String>,
+    pub color_modes: Vec<String>,
+    pub duplex: bool,
+    pub uuid: Option<String>,
+}
+
+impl ScanAdvertisement {
+    #[must_use]
+    pub fn fullname(&self) -> String {
+        format!("{}.{}", self.instance_name, AIRSCAN_SERVICE_TYPE)
+    }
+
+    fn properties(&self) -> HashMap<String, String> {
+        let color_spaces = self
+            .color_modes
+            .iter()
+            .filter_map(|mode| match mode.as_str() {
+                "BlackAndWhite1" => Some("binary".to_string()),
+                "Grayscale8" => Some("grayscale".to_string()),
+                "RGB24" => Some("color".to_string()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let input_sources = self
+            .sources
+            .iter()
+            .filter_map(|source| match source.as_str() {
+                "platen" => Some("platen".to_string()),
+                "adf" => Some("adf".to_string()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let mut properties = HashMap::from([
+            ("txtvers".into(), "1".into()),
+            ("vers".into(), "2.0".into()),
+            ("ty".into(), self.make_model.clone()),
+            ("rs".into(), "eSCL".into()),
+            (
+                "pdl".into(),
+                bounded_csv(&self.formats, &PDL_PRIORITY, TXT_VALUE_MAX),
+            ),
+            (
+                "note".into(),
+                "Shared by PrintBridge while the app is running".into(),
+            ),
+            ("cs".into(), bounded_csv(&color_spaces, &[], TXT_VALUE_MAX)),
+            ("is".into(), bounded_csv(&input_sources, &[], TXT_VALUE_MAX)),
+            ("duplex".into(), bool_txt(self.duplex).into()),
+            (
+                "adminurl".into(),
+                format!("http://{}:{}/eSCL", self.address, self.port),
+            ),
+        ]);
+        if let Some(uuid) = &self.uuid {
+            properties.insert(
+                "uuid".into(),
+                uuid.strip_prefix("urn:uuid:").unwrap_or(uuid).to_string(),
+            );
+        }
+        properties
+    }
+
+    fn validate(&self) -> Result<(), BridgeError> {
+        if self.port == 0
+            || self.address.is_unspecified()
+            || self.address.is_loopback()
+            || self.address.is_link_local()
+            || self.address.is_multicast()
+            || self.instance_name.is_empty()
+            || self.instance_name.len() > 63
+            || !self.hostname.ends_with(".local.")
+            || self.make_model.is_empty()
+            || self.formats.is_empty()
+            || self.sources.is_empty()
+            || self.color_modes.is_empty()
+            || bounded_csv(&self.formats, &PDL_PRIORITY, TXT_VALUE_MAX).is_empty()
+            || bounded_csv(
+                &input_sources_for_validation(&self.sources),
+                &[],
+                TXT_VALUE_MAX,
+            )
+            .is_empty()
+            || bounded_csv(
+                &color_spaces_for_validation(&self.color_modes),
+                &[],
+                TXT_VALUE_MAX,
+            )
+            .is_empty()
+        {
+            return Err(lan_error(
+                "scanner advertisement metadata is incomplete or unsafe",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn input_sources_for_validation(values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .filter(|value| matches!(value.as_str(), "platen" | "adf"))
+        .cloned()
+        .collect()
+}
+
+fn color_spaces_for_validation(values: &[String]) -> Vec<String> {
+    values
+        .iter()
+        .filter_map(|value| match value.as_str() {
+            "BlackAndWhite1" => Some("binary".to_string()),
+            "Grayscale8" => Some("grayscale".to_string()),
+            "RGB24" => Some("color".to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
 fn bounded_csv(values: &[String], preferred: &[&str], maximum: usize) -> String {
     let mut ordered = Vec::with_capacity(values.len());
     let mut seen = HashSet::new();
@@ -223,6 +379,7 @@ fn bounded_csv(values: &[String], preferred: &[&str], maximum: usize) -> String 
 pub struct LanAdvertiser {
     daemon: Option<ServiceDaemon>,
     active: Option<LanAdvertisement>,
+    active_scan: Option<ScanAdvertisement>,
 }
 
 impl LanAdvertiser {
@@ -231,12 +388,29 @@ impl LanAdvertiser {
         Self {
             daemon: None,
             active: None,
+            active_scan: None,
         }
     }
 
     pub fn start(&mut self, advertisement: LanAdvertisement) -> Result<(), BridgeError> {
+        self.start_services(advertisement, None)
+    }
+
+    pub fn start_services(
+        &mut self,
+        advertisement: LanAdvertisement,
+        scan: Option<ScanAdvertisement>,
+    ) -> Result<(), BridgeError> {
         advertisement.validate()?;
-        if self.active.as_ref() == Some(&advertisement) {
+        if let Some(scan) = &scan {
+            scan.validate()?;
+            if scan.address != advertisement.address || scan.hostname != advertisement.hostname {
+                return Err(lan_error(
+                    "print and scan advertisements must use the same approved interface",
+                ));
+            }
+        }
+        if self.active.as_ref() == Some(&advertisement) && self.active_scan == scan {
             return Ok(());
         }
         self.stop()?;
@@ -262,20 +436,42 @@ impl LanAdvertiser {
         daemon
             .register(service)
             .map_err(|error| lan_error(format!("cannot register IPP DNS-SD service: {error}")))?;
+        if let Some(scan_advertisement) = &scan {
+            let service = ServiceInfo::new(
+                AIRSCAN_SERVICE_TYPE,
+                &scan_advertisement.instance_name,
+                &scan_advertisement.hostname,
+                IpAddr::V4(scan_advertisement.address),
+                scan_advertisement.port,
+                scan_advertisement.properties(),
+            )
+            .map_err(|error| lan_error(format!("invalid eSCL DNS-SD metadata: {error}")))?;
+            daemon.register(service).map_err(|error| {
+                lan_error(format!("cannot register eSCL DNS-SD service: {error}"))
+            })?;
+        }
         self.daemon = Some(daemon);
         self.active = Some(advertisement);
+        self.active_scan = scan;
         Ok(())
     }
 
     pub fn stop(&mut self) -> Result<(), BridgeError> {
         let Some(daemon) = self.daemon.take() else {
             self.active = None;
+            self.active_scan = None;
             return Ok(());
         };
         if let Some(active) = self.active.take() {
             let receiver = daemon
                 .unregister(&active.fullname())
                 .map_err(|error| lan_error(format!("cannot unregister IPP service: {error}")))?;
+            let _ = receiver.recv_timeout(std::time::Duration::from_secs(2));
+        }
+        if let Some(active) = self.active_scan.take() {
+            let receiver = daemon
+                .unregister(&active.fullname())
+                .map_err(|error| lan_error(format!("cannot unregister eSCL service: {error}")))?;
             let _ = receiver.recv_timeout(std::time::Duration::from_secs(2));
         }
         daemon
@@ -287,6 +483,11 @@ impl LanAdvertiser {
     #[must_use]
     pub fn active(&self) -> Option<&LanAdvertisement> {
         self.active.as_ref()
+    }
+
+    #[must_use]
+    pub fn active_scan(&self) -> Option<&ScanAdvertisement> {
+        self.active_scan.as_ref()
     }
 }
 
@@ -318,7 +519,7 @@ fn lan_error(detail: impl Into<String>) -> BridgeError {
 mod tests {
     use std::net::Ipv4Addr;
 
-    use super::{AIRPRINT_SERVICE_TYPE, LanAdvertisement};
+    use super::{AIRPRINT_SERVICE_TYPE, AIRSCAN_SERVICE_TYPE, LanAdvertisement, ScanAdvertisement};
 
     fn advertisement() -> LanAdvertisement {
         LanAdvertisement {
@@ -387,5 +588,53 @@ mod tests {
         assert_eq!(&query[query.len() - 5..], &[0, 0, 12, 0, 1]);
         assert!(query.windows(10).any(|part| part == b"_universal"));
         assert!(query.len() < 512);
+    }
+
+    #[test]
+    fn airscan_txt_uses_escl_and_truthful_formats() {
+        let scanner = ScanAdvertisement {
+            instance_name: "Brother via PrintBridge Scanner".into(),
+            hostname: "printbridge-m4.local.".into(),
+            address: Ipv4Addr::new(192, 168, 1, 10),
+            port: 8645,
+            make_model: "Brother DCP-L2600D".into(),
+            formats: vec!["image/jpeg".into(), "application/pdf".into()],
+            sources: vec!["platen".into()],
+            color_modes: vec!["Grayscale8".into(), "RGB24".into()],
+            duplex: false,
+            uuid: Some("urn:uuid:test-scanner".into()),
+        };
+        let properties = scanner.properties();
+        assert_eq!(properties["rs"], "eSCL");
+        assert_eq!(properties["pdl"], "application/pdf,image/jpeg");
+        assert_eq!(properties["uuid"], "test-scanner");
+        assert_eq!(properties["vers"], "2.0");
+        assert_eq!(properties["cs"], "grayscale,color");
+        assert_eq!(properties["is"], "platen");
+        assert_eq!(properties["duplex"], "F");
+        assert_eq!(properties["adminurl"], "http://192.168.1.10:8645/eSCL");
+        assert_eq!(AIRSCAN_SERVICE_TYPE, "_uscan._tcp.local.");
+        assert!(scanner.validate().is_ok());
+    }
+
+    #[test]
+    fn airscan_rejects_capabilities_that_cannot_be_advertised_truthfully() {
+        let mut scanner = ScanAdvertisement {
+            instance_name: "Brother via PrintBridge Scanner".into(),
+            hostname: "printbridge-m4.local.".into(),
+            address: Ipv4Addr::new(192, 168, 1, 10),
+            port: 8645,
+            make_model: "Brother DCP-L2600D".into(),
+            formats: vec!["image/jpeg".into()],
+            sources: vec!["platen".into()],
+            color_modes: vec!["Grayscale8".into()],
+            duplex: false,
+            uuid: Some("urn:uuid:test-scanner".into()),
+        };
+        scanner.sources = vec!["proprietary-source".into()];
+        assert!(scanner.validate().is_err());
+        scanner.sources = vec!["platen".into()];
+        scanner.color_modes = vec!["VendorColor42".into()];
+        assert!(scanner.validate().is_err());
     }
 }

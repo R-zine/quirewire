@@ -133,6 +133,42 @@ impl PrinterEndpoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScannerEndpoint {
+    pub address: IpAddr,
+    pub port: u16,
+}
+
+impl ScannerEndpoint {
+    #[must_use]
+    pub const fn loopback(port: u16) -> Self {
+        Self {
+            address: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            port,
+        }
+    }
+
+    #[must_use]
+    pub fn web_url(&self) -> String {
+        let host = match self.address {
+            IpAddr::V4(address) => address.to_string(),
+            IpAddr::V6(address) => format!("[{address}]"),
+        };
+        format!("http://{host}:{}/", self.port)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScannerCapabilities {
+    pub make_model: String,
+    pub uuid: Option<String>,
+    pub sources: Vec<String>,
+    pub duplex: bool,
+    pub color_modes: Vec<String>,
+    pub document_formats: Vec<String>,
+    pub resolutions_dpi: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrintQueue {
     pub name: String,
     pub driver: String,

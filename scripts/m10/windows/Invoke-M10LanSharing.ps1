@@ -12,6 +12,9 @@ param(
     [ValidateRange(1, 65535)]
     [int]$IppPort,
 
+    [ValidateRange(0, 65535)]
+    [int]$ScanPort = 0,
+
     [Parameter(Mandatory)]
     [string]$AgentExecutable,
 
@@ -27,6 +30,7 @@ $ErrorActionPreference = 'Stop'
 $protocol = 'PRINTBRIDGE_LAN_V2'
 $marker = "printbridge.m10.firewall.v1 owner $($OwnerToken.ToLowerInvariant())"
 $ippRuleName = "PrintBridge $($OwnerToken.ToLowerInvariant()) LAN IPP"
+$scanRuleName = "PrintBridge $($OwnerToken.ToLowerInvariant()) LAN eSCL"
 $mdnsRuleName = "PrintBridge $($OwnerToken.ToLowerInvariant()) LAN mDNS"
 
 function ConvertTo-Field([AllowEmptyString()][string]$Value) {
@@ -238,19 +242,29 @@ try {
                 throw 'Installing scoped firewall rules requires a one-time administrator approval.'
             }
             Install-ExactRule $ippRuleName TCP $IppPort $VBoxHeadlessExecutable
+            if ($ScanPort -gt 0) {
+                Install-ExactRule $scanRuleName TCP $ScanPort $VBoxHeadlessExecutable
+            }
+            else {
+                $scanRule = Get-ExactRule $scanRuleName
+                if ($scanRule) { $scanRule | Remove-NetFirewallRule }
+            }
             Install-ExactRule $mdnsRuleName UDP 5353 $AgentExecutable
         }
         'RemoveFirewall' {
             if (-not (Test-IsAdministrator)) {
                 throw 'Removing scoped firewall rules requires administrator approval.'
             }
-            foreach ($name in @($ippRuleName, $mdnsRuleName)) {
+            foreach ($name in @($ippRuleName, $scanRuleName, $mdnsRuleName)) {
                 $rule = Get-ExactRule $name
                 if ($rule) { $rule | Remove-NetFirewallRule }
             }
         }
     }
+    $scanFirewallReady = $ScanPort -eq 0 -or
+        (Test-Rule $scanRuleName TCP $ScanPort $VBoxHeadlessExecutable)
     $firewallReady = (Test-Rule $ippRuleName TCP $IppPort $VBoxHeadlessExecutable) -and
+        $scanFirewallReady -and
         (Test-Rule $mdnsRuleName UDP 5353 $AgentExecutable)
     $reason = if (-not $lan.available) { $lan.reason }
     elseif (-not $firewallReady) {

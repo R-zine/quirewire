@@ -14,6 +14,7 @@ const status: AgentStatus = {
     usb: { state: "ready", detail: "ready" },
     cups: { state: "ready", detail: "ready" },
     windows_queue: { state: "ready", detail: "ready" },
+    scanner: { state: "ready", detail: "ready" },
     lan: { state: "ready", detail: "ready" },
   },
   startup: { registered: false, task_name: "task", logoff_behavior: "on demand" },
@@ -24,6 +25,17 @@ const status: AgentStatus = {
     address: "192.168.1.20",
     endpoint: "ipp://192.168.1.20:8644/printers/PrintBridge_DCP_L2600D",
     service_instance: "Brother via PrintBridge",
+  },
+  scanner: {
+    available: true,
+    loopback_url: "http://127.0.0.1:8645/",
+    lan_url: "http://192.168.1.20:8645/",
+    service_instance: "Brother via PrintBridge Scanner",
+    make_model: "Brother DCP-L2600D",
+    sources: ["platen"],
+    color_modes: ["Grayscale8"],
+    document_formats: ["application/pdf"],
+    resolutions_dpi: [300],
   },
 };
 

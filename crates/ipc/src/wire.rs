@@ -126,6 +126,7 @@ pub struct AgentStatus {
     pub components: AgentComponents,
     pub startup: StartupStatus,
     pub lan: LanStatus,
+    pub scanner: ScannerStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,6 +137,7 @@ pub struct AgentComponents {
     pub usb: WireComponent,
     pub cups: WireComponent,
     pub windows_queue: WireComponent,
+    pub scanner: WireComponent,
     pub lan: WireComponent,
 }
 
@@ -177,6 +179,20 @@ pub struct LanStatus {
     pub address: Option<String>,
     pub endpoint: Option<String>,
     pub service_instance: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScannerStatus {
+    pub available: bool,
+    pub loopback_url: String,
+    pub lan_url: Option<String>,
+    pub service_instance: Option<String>,
+    pub make_model: Option<String>,
+    pub sources: Vec<String>,
+    pub color_modes: Vec<String>,
+    pub document_formats: Vec<String>,
+    pub resolutions_dpi: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

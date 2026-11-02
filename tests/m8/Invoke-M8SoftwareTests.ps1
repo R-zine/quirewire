@@ -102,6 +102,11 @@ Check 'installer hooks cover upgrade install and uninstall' {
     $hooks -match 'NSIS_HOOK_PREINSTALL' -and $hooks -match 'PrepareUpgrade' -and
         $hooks -match 'NSIS_HOOK_POSTINSTALL' -and $hooks -match 'NSIS_HOOK_PREUNINSTALL'
 }
+Check 'installer lifecycle uses native PowerShell and native Program Files' {
+    $hooks -match '\$WINDIR\\Sysnative\\WindowsPowerShell' -and
+        $lifecycle -match "GetEnvironmentVariable\('ProgramW6432'\)" -and
+        $lifecycle -match 'installer-lifecycle-errors\.log'
+}
 Check 'hook aborts lifecycle failures' { $hooks -match 'Abort' -and $hooks -match 'No unowned printer' }
 Check 'manifest binds SID and exact roots' {
     $lifecycle -match 'printbridge\.m8\.installation\.v1' -and
